@@ -1,46 +1,105 @@
 'use client';
 
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api";
+import React, { useState } from 'react';
+import { Header } from '@/components/dashboard/Header';
+import { DashboardControls } from '@/components/dashboard/DashboardControls';
+import { GanttCropCalendar } from '@/components/dashboard/GanttCropCalendar';
+import { AIAssistant } from '@/components/dashboard/AIAssistant';
+import { HarvestGrowthChart } from '@/components/dashboard/HarvestGrowthChart';
+import { SeedStock } from '@/components/dashboard/SeedStock';
+import { WeatherWidget } from '@/components/dashboard/WeatherWidget';
 
 export default function DashboardPage() {
-  // Replace with actual user ID from authentication
-  const userId = "k57e13kzazx6j1pqyjg7m0mjcx7n85zt" as any; // This should come from your auth system
-  
-  const dashboardStats = useQuery(api.crops.getDashboardStats, { userId });
+  const [selectedCrop, setSelectedCrop] = useState('Tomatoes');
+  const [selectedPeriod, setSelectedPeriod] = useState('Last 30 days');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
-  if (!dashboardStats) {
-    return <div className="p-6">Loading dashboard...</div>;
-  }
+  // Mock data
+  const harvestData = [
+    { month: 'Jan', harvest: 120, growth: 15 },
+    { month: 'Feb', harvest: 135, growth: 22 },
+    { month: 'Mar', harvest: 165, growth: 35 },
+    { month: 'Apr', harvest: 180, growth: 28 },
+    { month: 'May', harvest: 220, growth: 45 },
+    { month: 'Jun', harvest: 280, growth: 52 }
+  ];
+
+  const seedStockData = [
+    { name: 'Tomato Seeds', current: 85, max: 100 },
+    { name: 'Corn Seeds', current: 60, max: 100 },
+    { name: 'Wheat Seeds', current: 40, max: 100 },
+    { name: 'Fertilizer', current: 25, max: 100 }
+  ];
+
+  const aiPrompts = [
+    "What's the optimal watering schedule for my current crops?",
+    "Analyze soil conditions and recommend fertilizers",
+    "Predict harvest yield based on current growth"
+  ];
+
+  const weather = {
+    current: { temp: 24, condition: 'Sunny', humidity: 65, wind: 12 },
+    forecast: [
+      { day: 'Today', temp: 24, condition: 'sunny' as const, rain: 0 },
+      { day: 'Tomorrow', temp: 22, condition: 'cloudy' as const, rain: 2 },
+      { day: 'Wednesday', temp: 26, condition: 'sunny' as const, rain: 0 },
+      { day: 'Thursday', temp: 23, condition: 'rainy' as const, rain: 8 },
+      { day: 'Friday', temp: 25, condition: 'sunny' as const, rain: 0 },
+      { day: 'Saturday', temp: 27, condition: 'sunny' as const, rain: 0 },
+      { day: 'Sunday', temp: 24, condition: 'cloudy' as const, rain: 1 }
+    ]
+  };
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#783121]">Dashboard</h1>
-        <p className="text-gray-600 mt-1">
-          Welcome to your farm management dashboard
-        </p>
+    <div className="flex flex-col bg-gray-50">
+      {/* Fixed Header */}
+      <div className="flex-none">
+        <Header />
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow border">
-          <h3 className="font-semibold text-[#783121] mb-2">Total Fields</h3>
-          <p className="text-3xl font-bold text-[#39883E]">{dashboardStats.totalFields}</p>
-        </div>
-        
-        <div className="bg-white p-6 rounded-lg shadow border">
-          <h3 className="font-semibold text-[#783121] mb-2">Active Crops</h3>
-          <p className="text-3xl font-bold text-[#39883E]">{dashboardStats.activeCrops}</p>
-        </div>
-        
-        <div className="bg-white p-6 rounded-lg shadow border">
-          <h3 className="font-semibold text-[#783121] mb-2">Water Usage</h3>
-          <p className="text-3xl font-bold text-[#39883E]">{dashboardStats.waterUsage}k L</p>
-        </div>
-        
-        <div className="bg-white p-6 rounded-lg shadow border">
-          <h3 className="font-semibold text-[#783121] mb-2">Equipment</h3>
-          <p className="text-3xl font-bold text-[#39883E]">{dashboardStats.equipment}</p>
+      {/* Fixed Dashboard Controls */}
+      <div className="flex-none border-b bg-white">
+        <DashboardControls 
+          selectedPeriod={selectedPeriod}
+          setSelectedPeriod={setSelectedPeriod}
+          selectedDate={selectedDate}
+          setSelectedDate={setSelectedDate}
+        />
+      </div>
+      
+      {/* Main Content Area - Fixed Height */}
+      <div className="flex-1 p-6 ">
+        <div className="h-full flex flex-col gap-6">
+          {/* Top Row - 50% height */}
+          <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Crop Calendar - Takes more space */}
+            <div className="lg:col-span-1">
+              <GanttCropCalendar />
+            </div>
+            
+            {/* AI Assistant */}
+            <div className="lg:col-span-1">
+              <AIAssistant aiPrompts={aiPrompts} />
+            </div>
+          </div>
+          
+          {/* Bottom Row - 50% height */}
+          <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Weather Widget */}
+            <div className="lg:col-span-1">
+              <WeatherWidget weather={weather} />
+            </div>
+            
+            {/* Seed Stock */}
+            <div className="lg:col-span-1">
+              <SeedStock seedStockData={seedStockData} />
+            </div>
+            
+            {/* Harvest Growth Chart */}
+            <div className="lg:col-span-1">
+              <HarvestGrowthChart harvestData={harvestData} />
+            </div>
+          </div>
         </div>
       </div>
     </div>
