@@ -4,10 +4,7 @@ import { v } from "convex/values";
 export const schema = defineSchema({
   // User management
   users: defineTable({
-<<<<<<< Updated upstream
-=======
     clerkId: v.string(),// Stores the Clerk user ID
->>>>>>> Stashed changes
     name: v.string(),
     email: v.string(),
     role: v.optional(v.union(v.literal("farmer"), v.literal("admin"), v.literal("buyer"))),
@@ -16,13 +13,9 @@ export const schema = defineSchema({
     farmSize: v.optional(v.number()), // in hectares
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
-<<<<<<< Updated upstream
-  })
-=======
     imageUrl: v.optional(v.string()),
   })
   .index("by_clerk_id", ["clerkId"])
->>>>>>> Stashed changes
     .index("by_email", ["email"])
     .index("by_role", ["role"]),
 
