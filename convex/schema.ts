@@ -223,33 +223,95 @@ export const schema = defineSchema({
     .index("by_featured", ["featured"])
     .index("by_price", ["pricePerUnit"]),
 
-  // Weather data integration
-  weatherData: defineTable({
-    userId: v.id("users"),
-    location: v.string(),
-    date: v.string(), // ISO date
-    temperature: v.optional(v.object({
-      min: v.number(),
-      max: v.number(),
-      avg: v.number(),
-    })),
-    rainfall: v.optional(v.number()), // mm
-    humidity: v.optional(v.number()), // percentage
-    windSpeed: v.optional(v.number()), // km/h
-    sunlightHours: v.optional(v.number()),
-    forecast: v.optional(v.array(v.object({
-      date: v.string(),
-      condition: v.string(),
-      tempMin: v.number(),
-      tempMax: v.number(),
-      rainfall: v.optional(v.number()),
-    }))),
-    source: v.optional(v.string()), // API source
-    createdAt: v.number(),
-  })
-    .index("by_user", ["userId"])
-    .index("by_location", ["location"])
-    .index("by_date", ["date"]),
+  // Enhanced weather data integration
+// Updated weatherData table to match the new API response format
+weatherData: defineTable({
+  userId: v.id("users"),
+  
+  // Location data from API
+  location: v.object({
+    lat: v.string(), // e.g., "26.2041S"
+    lon: v.string(), // e.g., "28.0473E"
+    elevation: v.number(), // in meters
+    timezone: v.string(), // e.g., "Africa/Johannesburg"
+  }),
+  
+  // API configuration
+  units: v.string(), // "metric" or "imperial"
+  
+  // Current weather conditions
+  current: v.object({
+    icon: v.string(), // e.g., "sunny"
+    icon_num: v.number(), // e.g., 2
+    summary: v.string(), // e.g., "Sunny"
+    temperature: v.number(), // current temperature
+    wind: v.object({
+      speed: v.number(), // wind speed
+      angle: v.number(), // wind angle in degrees
+      dir: v.string(), // wind direction (N, NE, etc.)
+    }),
+    precipitation: v.object({
+      total: v.number(), // precipitation amount
+      type: v.string(), // "none", "rain", "snow", etc.
+    }),
+    cloud_cover: v.number(), // cloud coverage percentage
+  }),
+  
+  // Daily forecast data
+  daily: v.optional(v.object({
+    data: v.array(v.object({
+      day: v.string(), // ISO date string "2025-08-11"
+      weather: v.string(), // weather condition
+      icon: v.number(), // weather icon number
+      summary: v.string(), // detailed summary
+      all_day: v.object({
+        weather: v.string(),
+        icon: v.number(),
+        temperature: v.number(), // average temperature
+        temperature_min: v.number(), // minimum temperature
+        temperature_max: v.number(), // maximum temperature
+        wind: v.object({
+          speed: v.number(),
+          dir: v.string(),
+          angle: v.number(),
+        }),
+        cloud_cover: v.object({
+          total: v.number(), // cloud coverage percentage
+        }),
+        precipitation: v.object({
+          total: v.number(),
+          type: v.string(),
+        }),
+      }),
+      // These can be null in the API response
+      morning: v.optional(v.any()), // Can be detailed object or null
+      afternoon: v.optional(v.any()), // Can be detailed object or null
+      evening: v.optional(v.any()), // Can be detailed object or null
+    }))
+  })),
+  
+  // Hourly data (null in your example but may be available)
+  hourly: v.optional(v.any()), // Can be array of hourly data or null
+  
+  // Metadata
+  source: v.optional(v.string()), // API source identifier
+  dataType: v.union(
+    v.literal("current"),
+    v.literal("forecast"), 
+    v.literal("current_and_forecast")
+  ),
+  createdAt: v.number(),
+  expiresAt: v.optional(v.number()), // For caching weather data
+  
+  // Optional fields for backward compatibility or additional data
+  query: v.optional(v.string()), // Original query used
+  requestType: v.optional(v.string()), // "coordinates", "city", etc.
+})
+  .index("by_user", ["userId"])
+  .index("by_location", ["location.lat", "location.lon"])
+  .index("by_data_type", ["dataType"])
+  .index("by_created_at", ["createdAt"])
+  .index("by_expires_at", ["expiresAt"]),
 
   // AI recommendations and insights
   recommendations: defineTable({
@@ -321,4 +383,5 @@ export const schema = defineSchema({
     .index("by_crop", ["cropId"])
     .index("by_date", ["date"]),
 });
+
 export default schema;
