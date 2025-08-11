@@ -5,6 +5,7 @@ import { SignedOut, SignedIn, SignInButton, UserButton } from '@clerk/nextjs';
 import { DashboardControls } from '@/components/dashboard/DashboardControls';
 import { GanttCropCalendar } from '@/components/dashboard/GanttCropCalendar';
 import { AIAssistant } from '@/components/dashboard/AIAssistant';
+import { AIAssistantModal } from '@/components/dashboard/AIAssistantModal';
 import { HarvestGrowthChart } from '@/components/dashboard/HarvestGrowthChart';
 import { SeedStock } from '@/components/dashboard/SeedStock';
 import { WeatherWidget } from '@/components/dashboard/WeatherWidget';
@@ -13,6 +14,7 @@ export default function DashboardPage() {
   const [selectedCrop, setSelectedCrop] = useState('Tomatoes');
   const [selectedPeriod, setSelectedPeriod] = useState('Last 30 days');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Mock data
   const harvestData = [
@@ -51,21 +53,17 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="flex flex-col bg-gray-50">
+    <div className="flex flex-col bg-gray-50 h-screen">
       {/* Fixed Header */}
       <div className="flex-none">
-        {/* Header with search and user auth */}
         <div className="p-4 bg-white border-b flex justify-between items-center">
-          {/* Search Function - left aligned */}
           <div className="flex-1 max-w-md">
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder="Search crops, tasks, or reports..."
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
             />
           </div>
-
-          {/* Clerk Authentication */}
           <div className="ml-4">
             <SignedOut>
               <SignInButton mode="modal" />
@@ -76,52 +74,54 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-      
+
       {/* Fixed Dashboard Controls */}
       <div className="flex-none border-b bg-white">
-        <DashboardControls 
+        <DashboardControls
           selectedPeriod={selectedPeriod}
           setSelectedPeriod={setSelectedPeriod}
           selectedDate={selectedDate}
           setSelectedDate={setSelectedDate}
         />
       </div>
-      
-      {/* Main Content Area - Fixed Height */}
-      <div className="flex-1 p-6 ">
+
+      {/* Main Content Area - Scrolls */}
+      <div className="flex-1 p-6 overflow-y-auto">
         <div className="h-full flex flex-col gap-6">
-          {/* Top Row - 50% height */}
+          {/* Top Row */}
           <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Crop Calendar - Takes more space */}
             <div className="lg:col-span-1">
               <GanttCropCalendar />
             </div>
-            
-            {/* AI Assistant */}
-            <div className="lg:col-span-1">
-              <AIAssistant aiPrompts={aiPrompts} />
+            {/* This is the key change: min-h-0 is added to the parent div */}
+            <div className="lg:col-span-1 min-h-0">
+              <AIAssistant
+                aiPrompts={aiPrompts}
+                onFirstInteraction={() => setIsModalOpen(true)}
+              />
             </div>
           </div>
-          
-          {/* Bottom Row - 50% height */}
+
+          {/* Bottom Row */}
           <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Weather Widget */}
             <div className="lg:col-span-1">
               <WeatherWidget weather={weather} />
             </div>
-            
-            {/* Seed Stock */}
             <div className="lg:col-span-1">
               <SeedStock seedStockData={seedStockData} />
             </div>
-            
-            {/* Harvest Growth Chart */}
             <div className="lg:col-span-1">
               <HarvestGrowthChart harvestData={harvestData} />
             </div>
           </div>
         </div>
       </div>
+
+      {/* The modal is correctly placed inside the main return div */}
+      <AIAssistantModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+      />
     </div>
   );
 }
