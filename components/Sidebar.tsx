@@ -3,6 +3,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { SignedOut, SignedIn, SignInButton, UserButton, useUser } from '@clerk/nextjs'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard,
@@ -16,7 +17,8 @@ import {
   Wrench,
   Users,
   Settings,
-  HelpCircle
+  HelpCircle,
+  User
 } from 'lucide-react'
 
 const sidebarItems = [
@@ -89,6 +91,7 @@ const sidebarItems = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const { user } = useUser()
 
   return (
     <div className="flex h-screen w-64 flex-col bg-[#E1E2E4] border-r">
@@ -142,6 +145,40 @@ export function Sidebar() {
           </div>
         ))}
       </nav>
+
+      {/* User Authentication Section */}
+      <div className="border-t bg-[#E1E2E4] p-4">
+        <SignedOut>
+          <div className="flex items-center justify-center">
+            <SignInButton mode="modal">
+              <button className="flex items-center space-x-2 w-full px-3 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-[#39883E]/10 hover:text-[#39883E] transition-colors">
+                <User className="h-5 w-5" />
+                <span>Sign In</span>
+              </button>
+            </SignInButton>
+          </div>
+        </SignedOut>
+        
+        <SignedIn>
+          <div className="flex items-center space-x-3">
+            <UserButton 
+              appearance={{
+                elements: {
+                  avatarBox: "h-8 w-8"
+                }
+              }}
+            />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 truncate">
+                {user?.fullName || user?.firstName || 'User'}
+              </p>
+              <p className="text-xs text-gray-500 truncate">
+                {user?.primaryEmailAddress?.emailAddress}
+              </p>
+            </div>
+          </div>
+        </SignedIn>
+      </div>
     </div>
   )
 }

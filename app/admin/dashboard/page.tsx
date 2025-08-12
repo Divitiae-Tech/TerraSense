@@ -1,8 +1,6 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { SignedOut, SignedIn, SignInButton, UserButton } from '@clerk/nextjs';
 import { DashboardControls } from '@/components/dashboard/DashboardControls';
 import { GanttCropCalendar } from '@/components/dashboard/GanttCropCalendar';
 import { AIAssistant } from '@/components/dashboard/AIAssistant';
@@ -93,25 +91,15 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col bg-gray-50 h-screen">
-      {/* Fixed Header */}
+      {/* Fixed Header - Simplified without auth components */}
       <div className="flex-none">
-        <div className="p-4 bg-white border-b flex justify-between items-center">
+        <div className="p-4 bg-white border-b">
           <div className="flex-1 max-w-md">
             <input
               type="text"
               placeholder="Search crops, tasks, or reports..."
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
             />
-          </div>
-
-          {/* Clerk Authentication */}
-          <div className="ml-4">
-            <SignedOut>
-              <SignInButton mode="modal" />
-            </SignedOut>
-            <SignedIn>
-              <UserButton />
-            </SignedIn>
           </div>
         </div>
       </div>
