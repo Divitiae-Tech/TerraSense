@@ -5,18 +5,25 @@ import { MessageSquare, Send, Bot, User, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useAIAssistant } from '../../hooks/useAIAssistant';
+import { useAIAssistant, Message } from '../../hooks/useAIAssistant';
 
 interface AIAssistantProps {
   aiPrompts: string[];
   onFirstInteraction?: () => void;
+  messages?: Message[];
+  isLoading?: boolean;
+  error?: string | null;
+  handleSubmit?: (prompt: string) => void;
 }
 
-export const AIAssistant = ({ aiPrompts, onFirstInteraction }: AIAssistantProps) => {
+export const AIAssistant = ({ aiPrompts, onFirstInteraction, messages: propMessages, isLoading: propIsLoading, error: propError, handleSubmit: propHandleSubmit }: AIAssistantProps) => {
   const [userInput, setUserInput] = useState('');
 
-  // Assuming no database for now. If you add it back, uncomment the user logic.
-  const { messages, isLoading, error, handleSubmit: originalHandleSubmit } = useAIAssistant();
+  // Use shared state when provided, otherwise use local hook
+  const isUsingSharedState = propMessages !== undefined && propIsLoading !== undefined && propError !== undefined && propHandleSubmit !== undefined;
+  const { messages, isLoading, error, handleSubmit: originalHandleSubmit } = isUsingSharedState
+    ? { messages: propMessages!, isLoading: propIsLoading!, error: propError!, handleSubmit: propHandleSubmit! }
+    : useAIAssistant();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -25,7 +32,7 @@ export const AIAssistant = ({ aiPrompts, onFirstInteraction }: AIAssistantProps)
 
   const handleSubmit = (prompt: string) => {
     originalHandleSubmit(prompt);
-    if (onFirstInteraction) {
+    if (onFirstInteraction && !isUsingSharedState) {
       onFirstInteraction();
     }
   };
@@ -39,7 +46,7 @@ export const AIAssistant = ({ aiPrompts, onFirstInteraction }: AIAssistantProps)
 
   return (
     // The Card now has h-full to ensure it fills the modal's height
-    <Card className="flex flex-col h-full shadow-lg overflow-hidden">
+    <Card className="flex flex-col h-full h-80 shadow-lg overflow-hidden">
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
           <MessageSquare className="h-5 w-5 text-purple-500" />
@@ -50,7 +57,7 @@ export const AIAssistant = ({ aiPrompts, onFirstInteraction }: AIAssistantProps)
       {/* This CardContent is a flex container that grows to fill available space */}
       <CardContent className="flex-1 flex flex-col p-0 min-h-0">
         {/* This is the key change: This div will now scroll */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 h-full">
 
           {messages.length === 0 && !isLoading && (
             <div className="text-center text-gray-500">

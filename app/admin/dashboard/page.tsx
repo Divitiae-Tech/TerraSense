@@ -9,6 +9,11 @@ import { AIAssistantModal } from '@/components/dashboard/AIAssistantModal';
 import { HarvestGrowthChart } from '@/components/dashboard/HarvestGrowthChart';
 import { SeedStock } from '@/components/dashboard/SeedStock';
 import { WeatherWidget } from '@/components/dashboard/WeatherWidget';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '@/convex/_generated/api';
+import { useUser } from '@clerk/nextjs';
+import { useAIAssistant } from '@/hooks/useAIAssistant';
+import { MessageSquare } from 'lucide-react';
 
 export default function DashboardPage() {
   const [selectedCrop, setSelectedCrop] = useState('Tomatoes');
@@ -16,6 +21,76 @@ export default function DashboardPage() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Get user and crops from Convex
+  const { user } = useUser();
+  const convexUser = useQuery(api.users.getUserByClerkId, user ? { clerkId: user.id } : "skip");
+  const crops = useQuery(
+    api.aiAssistant.getUserCrops,
+    convexUser && convexUser._id ? { userId: convexUser._id } : "skip"
+  ) || [];
+
+  // AI Assistant shared state, pass crops for ID replacement
+  const { messages, isLoading, error, handleSubmit, parseCalendarUpdate } = useAIAssistant(crops);
+  const upsertCropCalendar = useMutation(api.aiAssistant.upsertCropCalendar);
+  const addCrop = useMutation(api.aiAssistant.addCrop);
+
+  // Listen for AI calendar update instructions and trigger upsertCropCalendar
+  React.useEffect(() => {
+    if (!messages || messages.length === 0 || !convexUser || !crops) return;
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg.role === 'model') {
+      const { addedCrops } = parseCalendarUpdate(lastMsg.text);
+      if (addedCrops && addedCrops.length > 0) {
+        (async () => {
+          for (const cropName of addedCrops) {
+            let crop = crops.find((c) => c.name.toLowerCase() === cropName.toLowerCase());
+            if (!crop) {
+              try {
+                const cropId = await addCrop({
+                  userId: convexUser._id,
+                  name: cropName,
+                  type: 'unknown',
+                  status: 'planned',
+                });
+                crop = {
+                  _id: cropId,
+                  name: cropName,
+                  userId: convexUser._id,
+                  type: 'unknown',
+                  status: 'planned',
+                  _creationTime: Date.now(),
+                  createdAt: Date.now(),
+                };
+              } catch (err) {
+                console.error('Error adding crop:', err);
+              }
+            }
+            if (crop) {
+              try {
+                const today = new Date();
+                const schedule = [
+                  {
+                    date: today.toISOString().split('T')[0],
+                    action: 'planting',
+                    description: 'Plant seeds',
+                    completed: false,
+                  },
+                ];
+                await upsertCropCalendar({
+                  userId: convexUser._id,
+                  cropId: crop._id,
+                  season: `${today.getFullYear()}-spring`,
+                  schedule,
+                });
+              } catch (err) {
+                console.error('Error upserting crop calendar:', err);
+              }
+            }
+          }
+        })();
+      }
+    }
+  }, [messages, crops, convexUser]);
   // Mock data
   const harvestData = [
     { month: 'Jan', harvest: 120, growth: 15 },
@@ -98,6 +173,10 @@ export default function DashboardPage() {
               <AIAssistant
                 aiPrompts={aiPrompts}
                 onFirstInteraction={() => setIsModalOpen(true)}
+                messages={messages}
+                isLoading={isLoading}
+                error={error}
+                handleSubmit={handleSubmit}
               />
             </div>
           </div>
@@ -117,10 +196,23 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Floating button to open AI Assistant Modal */}
+      <button
+        className="fixed bottom-4 right-4 bg-purple-600 text-white p-3 rounded-full shadow-lg hover:bg-purple-700 transition-colors"
+        onClick={() => setIsModalOpen(true)}
+      >
+        <MessageSquare className="h-6 w-6" />
+      </button>
+
       {/* The modal is correctly placed inside the main return div */}
       <AIAssistantModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+        aiPrompts={aiPrompts}
+        messages={messages}
+        isLoading={isLoading}
+        error={error}
+        handleSubmit={handleSubmit}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 'use client';
+import { useAIAssistant } from '../../hooks/useAIAssistant';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,8 +13,12 @@ import {
   CloudRain, 
   Droplets,
   Settings,
-  Plus
+  Plus,
+  Trash2
 } from 'lucide-react';
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useUser } from "@clerk/nextjs";
 
 interface CropSeason {
   crop: string;
@@ -29,101 +34,63 @@ interface GanttCropCalendarProps {
 }
 
 export const GanttCropCalendar = ({ isFullPage = false }: GanttCropCalendarProps) => {
+  // State and hooks
+  const [cropData, setCropData] = useState<CropSeason[]>([]);
   const [selectedSeason, setSelectedSeason] = useState<'PLANTING' | 'HARVEST'>('PLANTING');
+  const { user } = useUser();
+  const convexUser = useQuery(api.users.getUserByClerkId, user ? { clerkId: user.id } : "skip");
+  const addCrop = useMutation(api.aiAssistant.addCrop);
+  const crops = useQuery(
+    api.aiAssistant.getUserCrops,
+    convexUser ? { userId: convexUser._id } : "skip"
+  );
+  const cropCalendars = useQuery(
+    api.aiAssistant.getUserCropCalendars,
+    convexUser ? { userId: convexUser._id } : "skip"
+  );
+
+  // --- AI Assistant Crop Calendar Management ---
+  const { messages, parseCalendarUpdate } = useAIAssistant();
+  const upsertCropCalendar = useMutation(api.aiAssistant.upsertCropCalendar);
+  // Placeholder for remove mutation (implement in Convex backend)
+  // const removeCropCalendar = useMutation(api.aiAssistant.removeCropCalendar);
+  const findCropByName = (name: string) => crops?.find((c: any) => c.name.toLowerCase() === name.toLowerCase());
+
+  // Helper to get month index from date string (YYYY-MM-DD)
+  const getMonthIndex = (dateStr?: string) => {
+    if (!dateStr) return 0;
+    const month = new Date(dateStr).getMonth();
+  // Adjust for calendar months array (starts at MAR) 
+    return (month + 9) % 12;
+  };
+
+  useEffect(() => {
+    if (!cropCalendars || !crops) return;
+    
+    const mappedCropData: CropSeason[] = cropCalendars.map((calendar: any) => {
+      const crop = crops.find((c: any) => c._id === calendar.cropId);
+      let cropName = crop ? crop.name : calendar.cropId;
+      cropName = cropName.charAt(0).toUpperCase() + cropName.slice(1).toLowerCase();
+      
+      // Find planting and harvesting dates from schedule
+      const plantingAction = calendar.schedule?.find((s: any) => s.action === 'planting');
+      const harvestAction = calendar.schedule?.find((s: any) => s.action === 'harvesting');
+      
+      return {
+        crop: cropName,
+        icon: <div className="w-2 h-2 bg-green-500 rounded-full" />,
+        plantingStart: getMonthIndex(plantingAction?.date),
+        plantingEnd: getMonthIndex(plantingAction?.date),
+        harvestStart: getMonthIndex(harvestAction?.date),
+        harvestEnd: getMonthIndex(harvestAction?.date)
+      };
+    });
+    
+    setCropData(mappedCropData);
+  }, [cropCalendars, crops]);
 
   const months = ['MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC', 'JAN', 'FEB'];
   
-  const cropData: CropSeason[] = [
-    {
-      crop: 'Long Grain Rice',
-      icon: <div className="w-2 h-2 bg-green-500 rounded-full" />,
-      plantingStart: 0, // March
-      plantingEnd: 2,   // May
-      harvestStart: 7,  // October
-      harvestEnd: 9     // December
-    },
-    {
-      crop: 'Sugar Beet',
-      icon: <div className="w-2 h-2 bg-green-500 rounded-full" />,
-      plantingStart: 0, // March
-      plantingEnd: 1,   // April
-      harvestStart: 6,  // September
-      harvestEnd: 8     // November
-    },
-    {
-      crop: 'Sugarcane',
-      icon: <div className="w-2 h-2 bg-green-500 rounded-full" />,
-      plantingStart: 1, // April
-      plantingEnd: 2,   // May
-      harvestStart: 9,  // December
-      harvestEnd: 11    // February
-    },
-    {
-      crop: 'Cotton',
-      icon: <div className="w-2 h-2 bg-green-500 rounded-full" />,
-      plantingStart: 0, // March
-      plantingEnd: 3,   // June
-      harvestStart: 5,  // August
-      harvestEnd: 8     // November
-    },
-    {
-      crop: 'Sorghum',
-      icon: <div className="w-2 h-2 bg-orange-500 rounded-full" />,
-      plantingStart: 2, // May
-      plantingEnd: 4,   // July
-      harvestStart: 7,  // October
-      harvestEnd: 9     // December
-    },
-    {
-      crop: 'Grapes',
-      icon: <div className="w-2 h-2 bg-orange-500 rounded-full" />,
-      plantingStart: 1, // April
-      plantingEnd: 4,   // July
-      harvestStart: 6,  // September
-      harvestEnd: 9     // December
-    },
-    {
-      crop: 'Olives',
-      icon: <div className="w-2 h-2 bg-green-500 rounded-full" />,
-      plantingStart: 0, // March
-      plantingEnd: 5,   // August
-      harvestStart: 6,  // September
-      harvestEnd: 8     // November
-    },
-    {
-      crop: 'Poplar',
-      icon: <div className="w-2 h-2 bg-green-500 rounded-full" />,
-      plantingStart: 3, // June
-      plantingEnd: 4,   // July
-      harvestStart: 8,  // November
-      harvestEnd: 11    // February
-    },
-    {
-      crop: 'Red Beet',
-      icon: <div className="w-2 h-2 bg-orange-500 rounded-full" />,
-      plantingStart: 4, // July
-      plantingEnd: 6,   // September
-      harvestStart: 8,  // November
-      harvestEnd: 11    // February
-    },
-    {
-      crop: 'Canola',
-      icon: <div className="w-2 h-2 bg-orange-500 rounded-full" />,
-      plantingStart: 4, // July
-      plantingEnd: 7,   // October
-      harvestStart: 9,  // December
-      harvestEnd: 11    // February
-    },
-    {
-      crop: 'Parsnips',
-      icon: <div className="w-2 h-2 bg-green-500 rounded-full" />,
-      plantingStart: 0, // March
-      plantingEnd: 2,   // May
-      harvestStart: 7,  // October
-      harvestEnd: 11    // February
-    }
-  ];
-
   const weatherData = [
     { temp: 24, icon: <Sun className="w-4 h-4 text-yellow-500" /> },
     { temp: 26, icon: <Sun className="w-4 h-4 text-yellow-500" /> },
@@ -167,6 +134,37 @@ export const GanttCropCalendar = ({ isFullPage = false }: GanttCropCalendarProps
     
     return segments;
   };
+  
+  const handleAddCrop = async () => {
+    // Add new crop to the database
+    if (convexUser) {
+      try {
+        await addCrop({
+          userId: convexUser._id,
+          name: `New Crop ${cropData.length + 1}`,
+          type: `newcrop${cropData.length + 1}`.toLowerCase(),
+          status: "planned",
+        });
+      } catch (error) {
+        console.error(`Error adding crop:`, error);
+      }
+    }
+    
+    // Update the crop data state with added crop
+    const newCrop: CropSeason = {
+      crop: `New Crop ${cropData.length + 1}`,
+      icon: <div className="w-2 h-2 bg-green-500 rounded-full" />,
+      plantingStart: 0,
+      plantingEnd: 2,
+      harvestStart: 6,
+      harvestEnd: 8
+    };
+    setCropData(prev => [...prev, newCrop]);
+  };
+  
+  const handleRemoveCrop = (cropName: string) => {
+    setCropData(prev => prev.filter(crop => crop.crop !== cropName));
+  };
 
   const containerClass = isFullPage ? "h-screen" : "h-80";
 
@@ -191,7 +189,7 @@ export const GanttCropCalendar = ({ isFullPage = false }: GanttCropCalendarProps
               HARVEST SEASON
             </Badge>
             {isFullPage && (
-              <Button size="sm" variant="outline">
+              <Button size="sm" variant="outline" onClick={handleAddCrop}>
                 <Plus className="w-4 h-4 mr-1" />
                 Add Crop
               </Button>
@@ -237,6 +235,16 @@ export const GanttCropCalendar = ({ isFullPage = false }: GanttCropCalendarProps
                   <span className="text-xs font-medium text-gray-700 truncate">
                     {crop.crop}
                   </span>
+                  {isFullPage && (
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      className="ml-auto p-1 h-5 w-5"
+                      onClick={() => handleRemoveCrop(crop.crop)}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  )}
                 </div>
                 <div className="flex-1 relative" style={{ minHeight: '48px' }}>
                   <div className="absolute inset-0 flex">
