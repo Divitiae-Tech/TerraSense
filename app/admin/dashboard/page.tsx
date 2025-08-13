@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -10,7 +9,6 @@ import { HarvestGrowthChart } from '@/components/dashboard/HarvestGrowthChart';
 import { SeedStock } from '@/components/dashboard/SeedStock';
 import { WeatherWidget } from '@/components/dashboard/WeatherWidget';
 
-// Type definitions for weather data
 interface CurrentWeather {
   temp: number;
   condition: string;
@@ -38,26 +36,57 @@ export default function DashboardPage() {
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [weatherError, setWeatherError] = useState<string | null>(null);
 
-  // Fetch weather data on component mount
+  const mapConditionIcon = (iconCode: string): 'sunny' | 'cloudy' | 'rainy' => {
+    switch (iconCode) {
+      case 'sunny':
+        return 'sunny';
+      case 'rainy':
+        return 'rainy';
+      case 'cloudy':
+      default:
+        return 'cloudy';
+    }
+  };
+
+  const formatForecastDay = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { weekday: 'short' });
+  };
+
   useEffect(() => {
+    const latitude = -33.9321;
+    const longitude = 18.8602;
+
     const fetchWeatherData = async () => {
+      setWeatherLoading(true);
+      setWeatherError(null);
+
       try {
-        setWeatherLoading(true);
-        setWeatherError(null);
-        
-        const response = await fetch('/api/weather');
+        const response = await fetch(`/api/weather?lat=${latitude}&lon=${longitude}`);
         if (!response.ok) {
-          throw new Error('Failed to fetch weather data');
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to fetch weather data');
         }
-        
-        const weatherData: WeatherData = await response.json();
-        setWeather(weatherData);
+        const result = await response.json();
+
+        const transformedWeather: WeatherData = {
+          current: {
+            temp: Math.round(result.current?.temperature ?? 0),
+            condition: result.current?.condition?.summary ?? 'Clear',
+            humidity: Math.round(result.current?.humidity ?? 0),
+            wind: Math.round(result.current?.wind?.speed ?? 0)
+          },
+          forecast: result.daily?.slice(0, 7).map((day: any) => ({
+            day: formatForecastDay(day.date),
+            temp: Math.round(day.temperatureMax ?? day.temperature?.max ?? 0),
+            condition: mapConditionIcon(day.condition?.icon ?? 'cloudy'),
+            rain: Math.round((day.precipitation?.total ?? 0) * 100) / 100
+          })) || []
+        };
+
+        setWeather(transformedWeather);
       } catch (error) {
-        console.error('Error fetching weather:', error);
-        setWeatherError('Failed to load weather data');
-        
-        // Fallback to mock data if API fails
-        
+        setWeatherError(error instanceof Error ? error.message : 'Failed to load weather data');
       } finally {
         setWeatherLoading(false);
       }
@@ -66,7 +95,6 @@ export default function DashboardPage() {
     fetchWeatherData();
   }, []);
 
-  // Mock data for other components (you can replace these with API calls too)
   const harvestData = [
     { month: 'Jan', harvest: 120, growth: 15 },
     { month: 'Feb', harvest: 135, growth: 22 },
@@ -91,11 +119,8 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col bg-gray-50">
-      {/* Fixed Header */}
       <div className="flex-none">
-        {/* Header with search and user auth */}
         <div className="p-4 bg-white border-b flex justify-between items-center">
-          {/* Search Function - left aligned */}
           <div className="flex-1 max-w-md">
             <input 
               type="text" 
@@ -103,8 +128,6 @@ export default function DashboardPage() {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
             />
           </div>
-
-          {/* Clerk Authentication */}
           <div className="ml-4">
             <SignedOut>
               <SignInButton mode="modal" />
@@ -115,8 +138,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-      
-      {/* Fixed Dashboard Controls */}
       <div className="flex-none border-b bg-white">
         <DashboardControls 
           selectedPeriod={selectedPeriod}
@@ -125,33 +146,27 @@ export default function DashboardPage() {
           setSelectedDate={setSelectedDate}
         />
       </div>
-      
-      {/* Main Content Area - Fixed Height */}
       <div className="flex-1 p-6 ">
         <div className="h-full flex flex-col gap-6">
-          {/* Top Row - 50% height */}
           <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Crop Calendar - Takes more space */}
             <div className="lg:col-span-1">
               <GanttCropCalendar />
             </div>
-            
-            {/* AI Assistant */}
             <div className="lg:col-span-1">
               <AIAssistant aiPrompts={aiPrompts} />
             </div>
           </div>
-          
-          {/* Bottom Row - 50% height */}
           <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Weather Widget */}
             <div className="lg:col-span-1">
-              {weather ? (
-                <WeatherWidget 
-                  weather={weather} 
-                //  loading={weatherLoading}
-               //   error={weatherError}
-                />
+              {weatherError ? (
+                <div className="bg-white rounded-lg p-4 shadow-sm border h-full flex items-center justify-center">
+                  <div className="text-center">
+                    <p className="text-red-500">Weather Error</p>
+                    <p className="text-gray-500 text-sm">{weatherError}</p>
+                  </div>
+                </div>
+              ) : weather ? (
+                <WeatherWidget weather={weather} />
               ) : (
                 <div className="bg-white rounded-lg p-4 shadow-sm border h-full flex items-center justify-center">
                   <div className="text-center">
@@ -161,13 +176,9 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
-            
-            {/* Seed Stock */}
             <div className="lg:col-span-1">
               <SeedStock seedStockData={seedStockData} />
             </div>
-            
-            {/* Harvest Growth Chart */}
             <div className="lg:col-span-1">
               <HarvestGrowthChart harvestData={harvestData} />
             </div>
