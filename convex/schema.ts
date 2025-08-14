@@ -225,91 +225,127 @@ export const schema = defineSchema({
 
   // Enhanced weather data integration
 // Updated weatherData table to match the new API response format
+// Enhanced weatherData table to match the merged Meteosource + Open-Meteo API response
 weatherData: defineTable({
   userId: v.id("users"),
-  
-  // Location data from API
+
+  // Location from API
   location: v.object({
-    lat: v.string(), // e.g., "26.2041S"
-    lon: v.string(), // e.g., "28.0473E"
-    elevation: v.number(), // in meters
-    timezone: v.string(), // e.g., "Africa/Johannesburg"
+    lat: v.number(),       // e.g., -26.2041
+    lon: v.number(),       // e.g., 28.0473
+    elevation: v.optional(v.number()), // in meters
+    timezone: v.string(),  // e.g., "Africa/Johannesburg"
   }),
-  
-  // API configuration
+
   units: v.string(), // "metric" or "imperial"
-  
-  // Current weather conditions
+
+  // Current weather
   current: v.object({
-    icon: v.string(), // e.g., "sunny"
-    icon_num: v.number(), // e.g., 2
-    summary: v.string(), // e.g., "Sunny"
-    temperature: v.number(), // current temperature
-    wind: v.object({
-      speed: v.number(), // wind speed
-      angle: v.number(), // wind angle in degrees
-      dir: v.string(), // wind direction (N, NE, etc.)
-    }),
-    precipitation: v.object({
-      total: v.number(), // precipitation amount
-      type: v.string(), // "none", "rain", "snow", etc.
-    }),
-    cloud_cover: v.number(), // cloud coverage percentage
+  timestamp: v.string(), // ISO date
+  temperature: v.number(),
+  feelsLike: v.optional(v.union(v.number(), v.null())),
+  humidity: v.optional(v.union(v.number(), v.null())),
+  dewPoint: v.optional(v.union(v.number(), v.null())),
+  pressure: v.optional(v.union(v.number(), v.null())),
+  cloudCover: v.optional(v.union(v.number(), v.null())),
+  uvIndex: v.optional(v.union(v.number(), v.null())),
+  wind: v.object({
+    speed: v.optional(v.union(v.number(), v.null())),
+    direction: v.optional(v.union(v.number(), v.null())), // in degrees
   }),
-  
-  // Daily forecast data
+  precipitation: v.object({
+    total: v.optional(v.union(v.number(), v.null())),
+    probability: v.optional(v.union(v.number(), v.null())),
+    type: v.optional(v.union(v.string(), v.null())),
+  }),
+  condition: v.object({
+    summary: v.optional(v.union(v.string(), v.null())),
+    icon: v.optional(v.union(v.string(), v.null())),
+    code: v.union(v.number(), v.string(), v.null())
+  }),
+  sunlight: v.object({
+    sunrise: v.optional(v.union(v.string(), v.null())),
+    sunset: v.optional(v.union(v.string(), v.null())),
+  })
+}),
+
+
+  // Daily forecast
   daily: v.optional(v.object({
     data: v.array(v.object({
-      day: v.string(), // ISO date string "2025-08-11"
-      weather: v.string(), // weather condition
-      icon: v.number(), // weather icon number
-      summary: v.string(), // detailed summary
-      all_day: v.object({
-        weather: v.string(),
-        icon: v.number(),
-        temperature: v.number(), // average temperature
-        temperature_min: v.number(), // minimum temperature
-        temperature_max: v.number(), // maximum temperature
-        wind: v.object({
-          speed: v.number(),
-          dir: v.string(),
-          angle: v.number(),
-        }),
-        cloud_cover: v.object({
-          total: v.number(), // cloud coverage percentage
-        }),
-        precipitation: v.object({
-          total: v.number(),
-          type: v.string(),
-        }),
+      date: v.string(), // ISO date
+      temperature: v.object({
+        min: v.optional(v.number()),
+        max: v.optional(v.number())
       }),
-      // These can be null in the API response
-      morning: v.optional(v.any()), // Can be detailed object or null
-      afternoon: v.optional(v.any()), // Can be detailed object or null
-      evening: v.optional(v.any()), // Can be detailed object or null
+      humidity: v.optional(v.object({
+        min: v.optional(v.number()),
+        max: v.optional(v.number())
+      })),
+      precipitation: v.optional(v.object({
+        total: v.optional(v.number()),
+        probability: v.optional(v.number())
+      })),
+      condition: v.optional(v.object({
+        summary: v.optional(v.string()),
+        icon: v.optional(v.string()),
+        code: v.optional(v.union(v.string(), v.null()))
+      })),
+      sunlight: v.optional(v.object({
+        sunrise: v.optional(v.string()),
+        sunset: v.optional(v.string())
+      }))
     }))
   })),
-  
-  // Hourly data (null in your example but may be available)
-  hourly: v.optional(v.any()), // Can be array of hourly data or null
-  
+
+  // Hourly forecast
+  hourly: v.optional(v.array(v.object({
+    timestamp: v.string(),
+    temperature: v.optional(v.number()),
+    feelsLike: v.optional(v.number()),
+    humidity: v.optional(v.number()),
+    dewPoint: v.optional(v.number()),
+    pressure: v.optional(v.number()),
+    cloudCover: v.optional(v.number()),
+    wind: v.optional(v.object({
+      speed: v.optional(v.number()),
+      direction: v.optional(v.number())
+    })),
+    precipitation: v.optional(v.object({
+      total: v.optional(v.number()),
+      probability: v.optional(v.number())
+    })),
+    condition: v.optional(v.object({
+      summary: v.optional(v.string()),
+      icon: v.optional(v.string()),
+      code: v.optional(v.union(v.string(), v.null()))
+    }))
+  }))),
+
+  // Optional minutely + alerts arrays
+  minutely: v.optional(v.array(v.any())),
+  alerts: v.optional(v.array(v.any())),
+
+  // Derived stats
+  derived: v.optional(v.object({
+    temperatureRange: v.optional(v.number()),
+    pressureTrend: v.optional(v.object({ direction: v.string() })),
+    humidityTrend: v.optional(v.object({ direction: v.string() })),
+    windConsistency: v.optional(v.object({ averageSpeed: v.number() })),
+    precipitationPattern: v.optional(v.object({ hoursWithRain: v.number() })),
+    weatherStability: v.optional(v.object({ temperatureStability: v.string() })),
+    seasonalContext: v.optional(v.object({ season: v.string() }))
+  })),
+
   // Metadata
-  source: v.optional(v.string()), // API source identifier
-  dataType: v.union(
-    v.literal("current"),
-    v.literal("forecast"), 
-    v.literal("current_and_forecast")
-  ),
+  source: v.optional(v.string()), // e.g., "Meteosource + Open-Meteo (gap-fill)"
   createdAt: v.number(),
-  expiresAt: v.optional(v.number()), // For caching weather data
-  
-  // Optional fields for backward compatibility or additional data
-  query: v.optional(v.string()), // Original query used
-  requestType: v.optional(v.string()), // "coordinates", "city", etc.
+  expiresAt: v.optional(v.number()),
+  query: v.optional(v.string()),
+  requestType: v.optional(v.string())
 })
   .index("by_user", ["userId"])
   .index("by_location", ["location.lat", "location.lon"])
-  .index("by_data_type", ["dataType"])
   .index("by_created_at", ["createdAt"])
   .index("by_expires_at", ["expiresAt"]),
 
