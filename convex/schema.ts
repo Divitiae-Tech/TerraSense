@@ -2,8 +2,18 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export const schema = defineSchema({
-  // User management
-  users: defineTable({
+// AI Conversations
+aiConversations: defineTable({
+  userId: v.id("users"),
+  role: v.union(v.literal("user"), v.literal("assistant")),
+  content: v.string(),
+  timestamp: v.number(),
+})
+  .index("by_user", ["userId"])
+  .index("by_timestamp", ["timestamp"]),
+
+// User management
+users: defineTable({
     clerkId: v.string(),// Stores the Clerk user ID
     name: v.string(),
     email: v.string(),

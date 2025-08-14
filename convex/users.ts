@@ -1,4 +1,4 @@
-import { mutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
 export const registerUser = mutation({
@@ -11,7 +11,7 @@ export const registerUser = mutation({
     location: v.optional(v.string()),
     phoneNumber: v.optional(v.string()),
     farmSize: v.optional(v.number()),
-    createdAt: v.number(), 
+    createdAt: v.number(),
   },
   handler: async (ctx, args) => {
     console.log("registerUser: Received args:", args); // Debug log
@@ -51,5 +51,19 @@ export const registerUser = mutation({
 
     console.log("registerUser: User created with ID:", userId); // Debug log
     return userId;
+  },
+});
+
+export const getUserByClerkId = query({
+  args: {
+    clerkId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
+      .first();
+    
+    return user;
   },
 });
