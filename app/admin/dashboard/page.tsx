@@ -14,7 +14,6 @@ import { useUser } from '@clerk/nextjs';
 import { useAIAssistant } from '@/hooks/useAIAssistant';
 import { MessageSquare } from 'lucide-react';
 
-// Type definitions for weather data
 interface CurrentWeather {
   temp: number;
   condition: string;
@@ -43,77 +42,65 @@ export default function DashboardPage() {
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [weatherError, setWeatherError] = useState<string | null>(null);
 
-  // Get user and crops from Convex
-  const { user } = useUser();
-  const convexUser = useQuery(api.users.getUserByClerkId, user ? { clerkId: user.id } : "skip");
-  const crops = useQuery(
-    api.aiAssistant.getUserCrops,
-    convexUser && convexUser._id ? { userId: convexUser._id } : "skip"
-  ) || [];
-
-  // AI Assistant shared state, pass crops for ID replacement
-  const { messages, isLoading, error, handleSubmit, parseCalendarUpdate } = useAIAssistant(crops);
-  const upsertCropCalendar = useMutation(api.aiAssistant.upsertCropCalendar);
-  const addCrop = useMutation(api.aiAssistant.addCrop);
-
-  // Listen for AI calendar update instructions and trigger upsertCropCalendar
-  React.useEffect(() => {
-    if (!messages || messages.length === 0 || !convexUser || !crops) return;
-    const lastMsg = messages[messages.length - 1];
-    if (lastMsg.role === 'model') {
-      const { addedCrops } = parseCalendarUpdate(lastMsg.text);
-      if (addedCrops && addedCrops.length > 0) {
-        (async () => {
-          for (const cropName of addedCrops) {
-            let crop = crops.find((c) => c.name.toLowerCase() === cropName.toLowerCase());
-            if (!crop) {
-              try {
-                const cropId = await addCrop({
-                  userId: convexUser._id,
-                  name: cropName,
-                  type: 'unknown',
-                  status: 'planned',
-                });
-                crop = {
-                  _id: cropId,
-                  name: cropName,
-                  userId: convexUser._id,
-                  type: 'unknown',
-                  status: 'planned',
-                  _creationTime: Date.now(),
-                  createdAt: Date.now(),
-                };
-              } catch (err) {
-                console.error('Error adding crop:', err);
-              }
-            }
-            if (crop) {
-              try {
-                const today = new Date();
-                const schedule = [
-                  {
-                    date: today.toISOString().split('T')[0],
-                    action: 'planting',
-                    description: 'Plant seeds',
-                    completed: false,
-                  },
-                ];
-                await upsertCropCalendar({
-                  userId: convexUser._id,
-                  cropId: crop._id,
-                  season: `${today.getFullYear()}-spring`,
-                  schedule,
-                });
-              } catch (err) {
-                console.error('Error upserting crop calendar:', err);
-              }
-            }
-          }
-        })();
-      }
+  const mapConditionIcon = (iconCode: string): 'sunny' | 'cloudy' | 'rainy' => {
+    switch (iconCode) {
+      case 'sunny':
+        return 'sunny';
+      case 'rainy':
+        return 'rainy';
+      case 'cloudy':
+      default:
+        return 'cloudy';
     }
-  }, [messages, crops, convexUser]);
-  // Mock data
+  };
+
+  const formatForecastDay = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { weekday: 'short' });
+  };
+
+  useEffect(() => {
+    const latitude = -33.9321;
+    const longitude = 18.8602;
+
+    const fetchWeatherData = async () => {
+      setWeatherLoading(true);
+      setWeatherError(null);
+
+      try {
+        const response = await fetch(`/api/weather?lat=${latitude}&lon=${longitude}`);
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to fetch weather data');
+        }
+        const result = await response.json();
+
+        const transformedWeather: WeatherData = {
+          current: {
+            temp: Math.round(result.current?.temperature ?? 0),
+            condition: result.current?.condition?.summary ?? 'Clear',
+            humidity: Math.round(result.current?.humidity ?? 0),
+            wind: Math.round(result.current?.wind?.speed ?? 0)
+          },
+          forecast: result.daily?.slice(0, 7).map((day: any) => ({
+            day: formatForecastDay(day.date),
+            temp: Math.round(day.temperatureMax ?? day.temperature?.max ?? 0),
+            condition: mapConditionIcon(day.condition?.icon ?? 'cloudy'),
+            rain: Math.round((day.precipitation?.total ?? 0) * 100) / 100
+          })) || []
+        };
+
+        setWeather(transformedWeather);
+      } catch (error) {
+        setWeatherError(error instanceof Error ? error.message : 'Failed to load weather data');
+      } finally {
+        setWeatherLoading(false);
+      }
+    };
+
+    fetchWeatherData();
+  }, []);
+
   const harvestData = [
     { month: 'Jan', harvest: 120, growth: 15 },
     { month: 'Feb', harvest: 135, growth: 22 },
@@ -137,10 +124,9 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="flex flex-col bg-gray-50 h-screen">
-      {/* Fixed Header - Simplified without auth components */}
+    <div className="flex flex-col bg-gray-50">
       <div className="flex-none">
-        <div className="p-4 bg-white border-b">
+        <div className="p-4 bg-white border-b flex justify-between items-center">
           <div className="flex-1 max-w-md">
             <input
               type="text"
@@ -148,10 +134,16 @@ export default function DashboardPage() {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
             />
           </div>
+          <div className="ml-4">
+            <SignedOut>
+              <SignInButton mode="modal" />
+            </SignedOut>
+            <SignedIn>
+              <UserButton />
+            </SignedIn>
+          </div>
         </div>
       </div>
-
-      {/* Fixed Dashboard Controls */}
       <div className="flex-none border-b bg-white">
         <DashboardControls
           selectedPeriod={selectedPeriod}
@@ -160,37 +152,27 @@ export default function DashboardPage() {
           setSelectedDate={setSelectedDate}
         />
       </div>
-
-      {/* Main Content Area - Scrolls */}
-      <div className="flex-1 p-6 overflow-y-auto">
+      <div className="flex-1 p-6 ">
         <div className="h-full flex flex-col gap-6">
-          {/* Top Row */}
           <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="lg:col-span-1">
               <GanttCropCalendar />
             </div>
-            {/* This is the key change: min-h-0 is added to the parent div */}
-            <div className="lg:col-span-1 min-h-0">
-              <AIAssistant
-                aiPrompts={aiPrompts}
-                onFirstInteraction={() => setIsModalOpen(true)}
-                messages={messages}
-                isLoading={isLoading}
-                error={error}
-                handleSubmit={handleSubmit}
-              />
+            <div className="lg:col-span-1">
+              <AIAssistant aiPrompts={aiPrompts} />
             </div>
           </div>
-
-          {/* Bottom Row */}
           <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-1">
-              {weather ? (
-                <WeatherWidget 
-                  weather={weather} 
-                //  loading={weatherLoading}
-               //   error={weatherError}
-                />
+              {weatherError ? (
+                <div className="bg-white rounded-lg p-4 shadow-sm border h-full flex items-center justify-center">
+                  <div className="text-center">
+                    <p className="text-red-500">Weather Error</p>
+                    <p className="text-gray-500 text-sm">{weatherError}</p>
+                  </div>
+                </div>
+              ) : weather ? (
+                <WeatherWidget weather={weather} />
               ) : (
                 <div className="bg-white rounded-lg p-4 shadow-sm border h-full flex items-center justify-center">
                   <div className="text-center">
