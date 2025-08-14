@@ -41,6 +41,7 @@ export default function DashboardPage() {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [weatherError, setWeatherError] = useState<string | null>(null);
+  const { messages, isLoading, error, handleSubmit } = useAIAssistant();
 
   const mapConditionIcon = (iconCode: string): 'sunny' | 'cloudy' | 'rainy' => {
     switch (iconCode) {
@@ -133,14 +134,6 @@ export default function DashboardPage() {
               placeholder="Search crops, tasks, or reports..."
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
             />
-          </div>
-          <div className="ml-4">
-            <SignedOut>
-              <SignInButton mode="modal" />
-            </SignedOut>
-            <SignedIn>
-              <UserButton />
-            </SignedIn>
           </div>
         </div>
       </div>
