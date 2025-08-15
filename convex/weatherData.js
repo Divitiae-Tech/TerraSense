@@ -163,3 +163,4 @@ function mergeDailyForecasts(existingDaily, newDaily) {
 
   return { ...newDaily, data: Array.from(dayMap.values()) };
 }
+
