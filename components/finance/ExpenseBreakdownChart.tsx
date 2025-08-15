@@ -8,9 +8,10 @@ import { SecureDataHandler } from '@/lib/secureDataHandler';
 
 interface ExpenseBreakdownChartProps {
   dateRange: string;
+  transactions?: any[];
 }
 
-const ExpenseBreakdownChart = ({ dateRange }: ExpenseBreakdownChartProps) => {
+const ExpenseBreakdownChart = ({ dateRange, transactions }: ExpenseBreakdownChartProps) => {
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {

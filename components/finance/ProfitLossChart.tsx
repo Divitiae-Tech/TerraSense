@@ -8,9 +8,10 @@ import { Badge } from '../ui/badge';
 
 interface ProfitLossChartProps {
   dateRange: string;
+  transactions?: any[];
 }
 
-const ProfitLossChart = ({ dateRange }: ProfitLossChartProps) => {
+const ProfitLossChart = ({ dateRange, transactions }: ProfitLossChartProps) => {
   const mockData = [
     { date: 'Jan', profit: 4000, income: 25000, expenses: 21000 },
     { date: 'Feb', profit: -2000, income: 18000, expenses: 20000 },

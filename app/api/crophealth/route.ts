@@ -1,5 +1,3 @@
-// api/crophealth/route.ts
-
 import axios from 'axios';
 import { PlantIdentificationRequest, PlantIdentificationResponse, ApiError } from '@/types/crops/cropHealth';
 
@@ -10,12 +8,11 @@ if (!API_KEY) {
   console.warn('NEXT_PUBLIC_KINDWISE_API_KEY is not set. The API will not work without it.');
 }
 
-export const convertImageToBase64 = (file: File): Promise<string> => {
+const convertImageToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       const base64String = reader.result as string;
-      // Remove the data:image/jpeg;base64, prefix
       const base64Data = base64String.split(',')[1];
       resolve(base64Data);
     };
@@ -24,7 +21,7 @@ export const convertImageToBase64 = (file: File): Promise<string> => {
   });
 };
 
-export const identifyPlant = async (
+const identifyPlant = async (
   images: string[],
   includeHealthAssessment: boolean = true
 ): Promise<PlantIdentificationResponse> => {
@@ -53,7 +50,7 @@ export const identifyPlant = async (
           'Api-Key': API_KEY,
           'Accept': 'application/json',
         },
-        timeout: 30000, // 30 second timeout
+        timeout: 30000,
       }
     );
 
@@ -98,11 +95,11 @@ export const identifyPlant = async (
   }
 };
 
-export const formatProbability = (probability: number): string => {
+const formatProbability = (probability: number): string => {
   return `${(probability * 100).toFixed(1)}%`;
 };
 
-export const getHealthStatus = (healthAssessment?: { is_healthy: { binary: boolean; probability: number } }): {
+const getHealthStatus = (healthAssessment?: { is_healthy: { binary: boolean; probability: number } }): {
   status: 'healthy' | 'unhealthy' | 'unknown';
   confidence: string;
   color: string;
@@ -123,3 +120,25 @@ export const getHealthStatus = (healthAssessment?: { is_healthy: { binary: boole
     color: binary ? 'text-green-600' : 'text-red-600',
   };
 };
+
+export async function POST(request: Request) {
+  try {
+    const formData = await request.formData();
+    const file = formData.get('image') as File;
+    
+    if (!file) {
+      return Response.json({ error: 'No image file provided' }, { status: 400 });
+    }
+
+    const base64Image = await convertImageToBase64(file);
+    const result = await identifyPlant([base64Image], true);
+    
+    return Response.json(result);
+  } catch (error) {
+    console.error('Crop health API error:', error);
+    return Response.json(
+      { error: 'Failed to analyze crop health' },
+      { status: 500 }
+    );
+  }
+}

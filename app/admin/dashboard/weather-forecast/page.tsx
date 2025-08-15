@@ -42,27 +42,18 @@ interface WeatherResponse {
   };
 }
 
-const WeatherIcon = ({ condition, size = 20 }: { condition: string; size?: number }) => {
-  const iconMap: { [key: string]: React.ReactNode } = {
-    'Clear': <Sun size={size} className="text-yellow-500" />,
-    'Cloudy': <Cloud size={size} className="text-gray-500" />,
-    'Rainy': <Droplets size={size} className="text-blue-500" />,
-    'Partly Cloudy': <Cloud size={size} className="text-gray-400" />,
-  };
-  
-  return iconMap[condition] || <Sun size={size} className="text-yellow-500" />;
-};
-
-const TrendIcon = ({ direction }: { direction?: string }) => {
-  if (direction === 'up' || direction === 'rising') return <TrendingUp size={16} className="text-green-500" />;
-  if (direction === 'down' || direction === 'falling') return <TrendingDown size={16} className="text-red-500" />;
-  return <div className="w-4 h-4" />;
-};
-
-export default function WeatherPage() {
-  const [data, setData] = useState<WeatherResponse | null>(null);
+const WeatherDashboard = () => {
+  const [weatherData, setWeatherData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [calendarOpen, setCalendarOpen] = useState(false);
+
+  // Calculate date range (today to 7 days ahead)
+  const today = new Date();
+  const maxDate = new Date();
+  maxDate.setDate(today.getDate() + 7);
 
   useEffect(() => {
     const fetchWeather = async () => {
@@ -81,10 +72,219 @@ export default function WeatherPage() {
     fetchWeather();
   }, []);
 
-  const formatTime = (ts: string) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const formatDate = (date: string) => new Date(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const fetchWeatherData = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/weather');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      setWeatherData(data);
+      setLastUpdated(new Date());
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      console.error('Error fetching weather data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  if (loading) {
+  // Get weather data for selected date
+  const getSelectedDateWeather = () => {
+    if (!weatherData?.forecast) return null;
+    
+    const selectedDateStr = selectedDate.toDateString();
+    const todayStr = today.toDateString();
+    
+    // If today is selected, return current weather
+    if (selectedDateStr === todayStr) {
+      return {
+        ...weatherData.current,
+        isToday: true,
+        date: selectedDate
+      };
+    }
+    
+    // Find forecast for selected date
+    const daysDifference = Math.ceil((selectedDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const forecastDay = weatherData.forecast[daysDifference];
+    
+    if (forecastDay) {
+      return {
+        temp: forecastDay.temp,
+        condition: forecastDay.condition,
+        humidity: 65, // Default values for forecast
+        wind: 12,
+        rain: forecastDay.rain || 0,
+        isToday: false,
+        date: selectedDate
+      };
+    }
+    
+    return null;
+  };
+
+  const selectedWeather = getSelectedDateWeather();
+
+  if (loading && !weatherData) {
+    return <LoadingComponent />;
+  }
+
+  if (error) {
+    return <ErrorComponent error={error} onRetry={fetchWeatherData} />;
+  }
+
+  return (
+    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      {/* Header with Date Selector */}
+      <HeaderComponent 
+        selectedDate={selectedDate}
+        onDateSelect={setSelectedDate}
+        calendarOpen={calendarOpen}
+        onCalendarToggle={setCalendarOpen}
+        lastUpdated={lastUpdated}
+        onRefresh={fetchWeatherData}
+        loading={loading}
+        today={today}
+        maxDate={maxDate}
+      />
+
+      {/* Current/Selected Date Weather Overview */}
+      <CurrentWeatherCard 
+        weather={selectedWeather}
+        isToday={selectedWeather?.isToday}
+        selectedDate={selectedDate}
+      />
+
+      {/* Agriculture Insights for Selected Date */}
+      <AgricultureInsightsCard 
+        weather={selectedWeather}
+        selectedDate={selectedDate}
+      />
+
+      {/* Detailed Metrics Grid */}
+      <MetricsGrid weather={selectedWeather} />
+
+      {/* 7-Day Forecast */}
+      <ForecastCard 
+        forecast={weatherData?.forecast}
+        selectedDate={selectedDate}
+        onDateSelect={setSelectedDate}
+      />
+    </div>
+  );
+};
+
+/**
+ * HEADER COMPONENT
+ * Handles title, date selection, and refresh functionality
+ */
+const HeaderComponent = ({ 
+  selectedDate, 
+  onDateSelect, 
+  calendarOpen, 
+  onCalendarToggle, 
+  lastUpdated, 
+  onRefresh, 
+  loading,
+  today,
+  maxDate 
+}: any) => {
+  const formatSelectedDate = () => {
+    const dateStr = selectedDate.toDateString();
+    const todayStr = today.toDateString();
+    
+    if (dateStr === todayStr) return "Today";
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    if (dateStr === tomorrow.toDateString()) return "Tomorrow";
+    
+    return selectedDate.toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      month: 'short', 
+      day: 'numeric' 
+    });
+  };
+
+  return (
+    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Weather Dashboard</h1>
+        <p className="text-gray-600 mt-1">Johannesburg, South Africa - Agricultural Conditions</p>
+      </div>
+      
+      <div className="flex items-center gap-4">
+        {/* Date Selector */}
+        <Popover open={calendarOpen} onOpenChange={onCalendarToggle}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-[200px] justify-start text-left font-normal">
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {formatSelectedDate()}
+              <ChevronDown className="ml-auto h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="end">
+            <Calendar
+              mode="single"
+              selected={selectedDate}
+              onSelect={(date) => {
+                if (date) {
+                  onDateSelect(date);
+                  onCalendarToggle(false);
+                }
+              }}
+              disabled={(date) => date < today || date > maxDate}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
+
+        {/* Last Updated and Refresh */}
+        <div className="text-right">
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <Clock className="w-4 h-4" />
+            Last updated: {lastUpdated?.toLocaleTimeString()}
+          </div>
+          <Button 
+            onClick={onRefresh}
+            variant="outline"
+            size="sm"
+            className="mt-2"
+            disabled={loading}
+          >
+            {loading ? 'Updating...' : 'Refresh'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * CURRENT WEATHER CARD COMPONENT
+ * Displays current or selected date weather overview
+ */
+const CurrentWeatherCard = ({ weather, isToday, selectedDate }: any) => {
+  const getWeatherIcon = (condition:any) => {
+    switch (condition?.toLowerCase()) {
+      case 'sunny':
+      case 'clear':
+        return <Sun className="w-8 h-8 text-yellow-500" />;
+      case 'cloudy':
+      case 'partly cloudy':
+        return <Cloud className="w-8 h-8 text-gray-500" />;
+      case 'rainy':
+      case 'stormy':
+        return <CloudRain className="w-8 h-8 text-blue-500" />;
+      default:
+        return <Cloud className="w-8 h-8 text-gray-500" />;
+    }
+  };
+
+  if (!weather) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
         <div className="max-w-6xl mx-auto space-y-6">

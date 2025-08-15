@@ -25,9 +25,10 @@ interface FinancialSummaryData {
 
 interface FinancialSummaryProps {
   dateRange: string;
+  transactions?: any[];
 }
 
-const FinancialSummary = ({ dateRange }: FinancialSummaryProps) => {
+const FinancialSummary = ({ dateRange, transactions }: FinancialSummaryProps) => {
   const [isClient, setIsClient] = useState(false);
   useEffect(() => {
     setIsClient(true);
