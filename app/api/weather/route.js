@@ -20,19 +20,19 @@ export async function GET() {
     }
 
     const meteosourceApiUrl =
-      `https://www.meteosource.com/api/v1/free/point` +
-      `?lat=${lat}&lon=${lon}` +
-      `&sections=current,daily,hourly,minutely,alerts` +
-      `&timezone=${timezone}` +
-      `&language=en&units=${units}` +
-      `&key=${process.env.METEOSOURCE_API_KEY}`;
+      https://www.meteosource.com/api/v1/free/point +
+      ?lat=${lat}&lon=${lon} +
+      &sections=current,daily,hourly,minutely,alerts +
+      &timezone=${timezone} +
+      &language=en&units=${units} +
+      &key=${process.env.METEOSOURCE_API_KEY};
 
     const openMeteoApiUrl =
-      `https://api.open-meteo.com/v1/forecast` +
-      `?latitude=${lat}&longitude=${lon}` +
-      `&current=temperature_2m,relative_humidity_2m` +
-      `&hourly=temperature_2m,relative_humidity_2m,dew_point_2m,pressure_msl,cloud_cover,wind_speed_10m,wind_direction_10m,precipitation,precipitation_probability` +
-      `&timezone=${timezone}&forecast_days=7`;
+      https://api.open-meteo.com/v1/forecast +
+      ?latitude=${lat}&longitude=${lon} +
+      &current=temperature_2m,relative_humidity_2m +
+      &hourly=temperature_2m,relative_humidity_2m,dew_point_2m,pressure_msl,cloud_cover,wind_speed_10m,wind_direction_10m,precipitation,precipitation_probability +
+      &timezone=${timezone}&forecast_days=7;
 
     const [meteosourceResponse, openMeteoResponse] = await Promise.all([
       fetch(meteosourceApiUrl),
