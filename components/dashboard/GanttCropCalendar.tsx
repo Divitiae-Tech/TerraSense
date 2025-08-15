@@ -7,12 +7,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { 
   Sprout, 
-  Tractor, 
-  Sun, 
-  Cloud, 
-  CloudRain, 
-  Droplets,
-  Settings,
   Plus,
   Trash2
 } from 'lucide-react';
@@ -39,131 +33,240 @@ export const GanttCropCalendar = ({ isFullPage = false }: GanttCropCalendarProps
   const [selectedSeason, setSelectedSeason] = useState<'PLANTING' | 'HARVEST'>('PLANTING');
   const { user } = useUser();
   const convexUser = useQuery(api.users.getUserByClerkId, user ? { clerkId: user.id } : "skip");
-  const addCrop = useMutation(api.aiAssistant.addCrop);
-  const crops = useQuery(
-    api.aiAssistant.getUserCrops,
+  const addCrop = useMutation(api.database.createCrop);
+  const updateCrop = useMutation(api.database.updateCrop);
+  const deleteCrop = useMutation(api.database.deleteRecord);
+  const userData = useQuery(
+    api.aiAssistant.getUserContext,
     convexUser ? { userId: convexUser._id } : "skip"
   );
-  const cropCalendars = useQuery(
-    api.aiAssistant.getUserCropCalendars,
-    convexUser ? { userId: convexUser._id } : "skip"
-  );
+  
+  // Memoize arrays to prevent infinite re-renders
+  const crops = React.useMemo(() => userData?.crops || [], [userData?.crops]);
 
-  // --- AI Assistant Crop Calendar Management ---
-  const { messages, parseCalendarUpdate } = useAIAssistant();
-  const upsertCropCalendar = useMutation(api.aiAssistant.upsertCropCalendar);
-  // Placeholder for remove mutation (implement in Convex backend)
-  // const removeCropCalendar = useMutation(api.aiAssistant.removeCropCalendar);
-  const findCropByName = (name: string) => crops?.find((c: any) => c.name.toLowerCase() === name.toLowerCase());
+  // AI logic for optimal planting and harvesting seasons
+  const getOptimalSeasons = React.useCallback((cropType: string) => {
+    const seasonalCrops: Record<string, { plantingStart: number, plantingEnd: number, harvestStart: number, harvestEnd: number }> = {
+      // Grains
+      'maize': { plantingStart: 2, plantingEnd: 4, harvestStart: 7, harvestEnd: 9 }, // Mar-May planting, Aug-Oct harvest
+      'corn': { plantingStart: 2, plantingEnd: 4, harvestStart: 7, harvestEnd: 9 },
+      'wheat': { plantingStart: 9, plantingEnd: 11, harvestStart: 2, harvestEnd: 4 }, // Oct-Dec planting, Mar-May harvest
+      'rice': { plantingStart: 1, plantingEnd: 3, harvestStart: 6, harvestEnd: 8 }, // Feb-Apr planting, Jul-Sep harvest
+      'barley': { plantingStart: 8, plantingEnd: 10, harvestStart: 1, harvestEnd: 3 }, // Sep-Nov planting, Feb-Apr harvest
+      
+      // Vegetables
+      'tomato': { plantingStart: 1, plantingEnd: 3, harvestStart: 4, harvestEnd: 7 }, // Feb-Apr planting, May-Aug harvest
+      'tomatoes': { plantingStart: 1, plantingEnd: 3, harvestStart: 4, harvestEnd: 7 },
+      'potato': { plantingStart: 7, plantingEnd: 9, harvestStart: 11, harvestEnd: 1 }, // Aug-Oct planting, Dec-Feb harvest
+      'potatoes': { plantingStart: 7, plantingEnd: 9, harvestStart: 11, harvestEnd: 1 },
+      'carrot': { plantingStart: 2, plantingEnd: 5, harvestStart: 5, harvestEnd: 8 }, // Mar-Jun planting, Jun-Sep harvest
+      'carrots': { plantingStart: 2, plantingEnd: 5, harvestStart: 5, harvestEnd: 8 },
+      'onion': { plantingStart: 1, plantingEnd: 3, harvestStart: 6, harvestEnd: 8 }, // Feb-Apr planting, Jul-Sep harvest
+      'onions': { plantingStart: 1, plantingEnd: 3, harvestStart: 6, harvestEnd: 8 },
+      'cabbage': { plantingStart: 1, plantingEnd: 3, harvestStart: 4, harvestEnd: 6 }, // Feb-Apr planting, May-Jul harvest
+      'lettuce': { plantingStart: 1, plantingEnd: 10, harvestStart: 2, harvestEnd: 11 }, // Year-round with gaps
+      'spinach': { plantingStart: 1, plantingEnd: 4, harvestStart: 2, harvestEnd: 6 }, // Feb-May planting, Mar-Jul harvest
+      'beans': { plantingStart: 2, plantingEnd: 4, harvestStart: 5, harvestEnd: 7 }, // Mar-May planting, Jun-Aug harvest
+      'peas': { plantingStart: 1, plantingEnd: 3, harvestStart: 3, harvestEnd: 5 }, // Feb-Apr planting, Apr-Jun harvest
+      'cucumber': { plantingStart: 2, plantingEnd: 4, harvestStart: 4, harvestEnd: 7 }, // Mar-May planting, May-Aug harvest
+      'squash': { plantingStart: 2, plantingEnd: 4, harvestStart: 5, harvestEnd: 8 }, // Mar-May planting, Jun-Sep harvest
+      'peppers': { plantingStart: 1, plantingEnd: 3, harvestStart: 5, harvestEnd: 8 }, // Feb-Apr planting, Jun-Sep harvest
+      
+      // Fruits
+      'apple': { plantingStart: 5, plantingEnd: 7, harvestStart: 0, harvestEnd: 3 }, // Jun-Aug planting, Jan-Apr harvest
+      'apples': { plantingStart: 5, plantingEnd: 7, harvestStart: 0, harvestEnd: 3 },
+      'orange': { plantingStart: 2, plantingEnd: 4, harvestStart: 9, harvestEnd: 11 }, // Mar-May planting, Oct-Dec harvest
+      'oranges': { plantingStart: 2, plantingEnd: 4, harvestStart: 9, harvestEnd: 11 },
+      'strawberry': { plantingStart: 1, plantingEnd: 3, harvestStart: 7, harvestEnd: 10 }, // Feb-Apr planting, Aug-Nov harvest
+      'strawberries': { plantingStart: 1, plantingEnd: 3, harvestStart: 7, harvestEnd: 10 },
+      'watermelon': { plantingStart: 2, plantingEnd: 4, harvestStart: 6, harvestEnd: 8 }, // Mar-May planting, Jul-Sep harvest
+      'melon': { plantingStart: 2, plantingEnd: 4, harvestStart: 6, harvestEnd: 8 },
+      'grapes': { plantingStart: 5, plantingEnd: 7, harvestStart: 0, harvestEnd: 2 }, // Jun-Aug planting, Jan-Mar harvest
+      
+      // Root crops
+      'sweet potato': { plantingStart: 2, plantingEnd: 4, harvestStart: 7, harvestEnd: 9 }, // Mar-May planting, Aug-Oct harvest
+      'radish': { plantingStart: 1, plantingEnd: 10, harvestStart: 2, harvestEnd: 11 }, // Year-round
+      'turnip': { plantingStart: 6, plantingEnd: 8, harvestStart: 9, harvestEnd: 11 }, // Jul-Sep planting, Oct-Dec harvest
+      'beet': { plantingStart: 2, plantingEnd: 6, harvestStart: 5, harvestEnd: 9 }, // Mar-Jul planting, Jun-Oct harvest
+      'beets': { plantingStart: 2, plantingEnd: 6, harvestStart: 5, harvestEnd: 9 },
+      
+      // Legumes
+      'soybean': { plantingStart: 3, plantingEnd: 5, harvestStart: 8, harvestEnd: 10 }, // Apr-Jun planting, Sep-Nov harvest
+      'soybeans': { plantingStart: 3, plantingEnd: 5, harvestStart: 8, harvestEnd: 10 },
+      'chickpea': { plantingStart: 9, plantingEnd: 11, harvestStart: 2, harvestEnd: 4 }, // Oct-Dec planting, Mar-May harvest
+      'chickpeas': { plantingStart: 9, plantingEnd: 11, harvestStart: 2, harvestEnd: 4 },
+      'lentil': { plantingStart: 9, plantingEnd: 11, harvestStart: 2, harvestEnd: 4 }, // Oct-Dec planting, Mar-May harvest
+      'lentils': { plantingStart: 9, plantingEnd: 11, harvestStart: 2, harvestEnd: 4 },
+    };
+    
+    // Default seasons if crop not found
+    const defaultSeasons = { plantingStart: 2, plantingEnd: 4, harvestStart: 6, harvestEnd: 8 };
+    
+    return seasonalCrops[cropType.toLowerCase()] || defaultSeasons;
+  }, []);
+
+  // Auto-populate planting and harvesting dates for crops that don't have them
+  const autoPopulateCropDates = React.useCallback(async () => {
+    if (!crops?.length || !updateCrop) return;
+    
+    for (const crop of crops) {
+      if (!crop.plantingDate || !crop.expectedHarvestDate) {
+        const seasons = getOptimalSeasons(crop.type);
+        const currentYear = new Date().getFullYear();
+        
+        // Convert month indices to actual dates
+        const plantingMonth = seasons.plantingStart;
+        const harvestMonth = seasons.harvestStart;
+        
+        // Adjust year for harvest if it's in the following year
+        const harvestYear = harvestMonth < plantingMonth ? currentYear + 1 : currentYear;
+        
+        const plantingDate = new Date(currentYear, plantingMonth, 15).toISOString().split('T')[0];
+        const harvestDate = new Date(harvestYear, harvestMonth, 15).toISOString().split('T')[0];
+        
+        try {
+          await updateCrop({
+            id: crop._id,
+            data: {
+              plantingDate: crop.plantingDate || plantingDate,
+              expectedHarvestDate: crop.expectedHarvestDate || harvestDate,
+            }
+          });
+        } catch (error) {
+          console.error('Error updating crop dates:', error);
+        }
+      }
+    }
+  }, [crops, updateCrop, getOptimalSeasons]);
 
   // Helper to get month index from date string (YYYY-MM-DD)
   const getMonthIndex = (dateStr?: string) => {
     if (!dateStr) return 0;
     const month = new Date(dateStr).getMonth();
-  // Adjust for calendar months array (starts at MAR) 
-    return (month + 9) % 12;
+    // Month index now matches standard calendar (Jan=0, Feb=1, etc.)
+    return month;
   };
 
+  // Auto-populate crop dates when crops are loaded
   useEffect(() => {
-    if (!cropCalendars || !crops) return;
+    autoPopulateCropDates();
+  }, [autoPopulateCropDates]);
+
+  useEffect(() => {
+    if (!crops?.length) {
+      setCropData([]);
+      return;
+    }
     
-    const mappedCropData: CropSeason[] = cropCalendars.map((calendar: any) => {
-      const crop = crops.find((c: any) => c._id === calendar.cropId);
-      let cropName = crop ? crop.name : calendar.cropId;
+    const mappedCropData: CropSeason[] = crops.map((crop: any) => {
+      let cropName = crop.name;
       cropName = cropName.charAt(0).toUpperCase() + cropName.slice(1).toLowerCase();
       
-      // Find planting and harvesting dates from schedule
-      const plantingAction = calendar.schedule?.find((s: any) => s.action === 'planting');
-      const harvestAction = calendar.schedule?.find((s: any) => s.action === 'harvesting');
+      // Get optimal seasons for this crop type
+      const optimalSeasons = getOptimalSeasons(crop.type);
+      
+      // Use actual dates if available, otherwise use optimal seasons
+      let plantingStart = optimalSeasons.plantingStart;
+      let plantingEnd = optimalSeasons.plantingEnd;
+      let harvestStart = optimalSeasons.harvestStart;
+      let harvestEnd = optimalSeasons.harvestEnd;
+      
+      if (crop.plantingDate) {
+        plantingStart = plantingEnd = getMonthIndex(crop.plantingDate);
+      }
+      if (crop.expectedHarvestDate) {
+        harvestStart = harvestEnd = getMonthIndex(crop.expectedHarvestDate);
+      }
       
       return {
         crop: cropName,
         icon: <div className="w-2 h-2 bg-green-500 rounded-full" />,
-        plantingStart: getMonthIndex(plantingAction?.date),
-        plantingEnd: getMonthIndex(plantingAction?.date),
-        harvestStart: getMonthIndex(harvestAction?.date),
-        harvestEnd: getMonthIndex(harvestAction?.date)
+        plantingStart,
+        plantingEnd,
+        harvestStart,
+        harvestEnd
       };
     });
     
     setCropData(mappedCropData);
-  }, [cropCalendars, crops]);
+  }, [crops, getOptimalSeasons]);
 
-  const months = ['MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC', 'JAN', 'FEB'];
+  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
   
-  const weatherData = [
-    { temp: 24, icon: <Sun className="w-4 h-4 text-yellow-500" /> },
-    { temp: 26, icon: <Sun className="w-4 h-4 text-yellow-500" /> },
-    { temp: 27, icon: <Sun className="w-4 h-4 text-yellow-500" /> },
-    { temp: 25, icon: <Sun className="w-4 h-4 text-yellow-500" /> },
-    { temp: 22, icon: <Cloud className="w-4 h-4 text-gray-500" /> },
-    { temp: 20, icon: <Cloud className="w-4 h-4 text-gray-500" /> },
-    { temp: 18, icon: <CloudRain className="w-4 h-4 text-blue-500" /> },
-    { temp: 16, icon: <CloudRain className="w-4 h-4 text-blue-500" /> },
-    { temp: 19, icon: <CloudRain className="w-4 h-4 text-blue-500" /> },
-    { temp: 21, icon: <Cloud className="w-4 h-4 text-gray-500" /> },
-    { temp: 23, icon: <Sun className="w-4 h-4 text-yellow-500" /> },
-    { temp: 25, icon: <Sun className="w-4 h-4 text-yellow-500" /> }
-  ];
 
   const renderBar = (crop: CropSeason, type: 'planting' | 'harvest') => {
     const start = type === 'planting' ? crop.plantingStart : crop.harvestStart;
     const end = type === 'planting' ? crop.plantingEnd : crop.harvestEnd;
     const color = type === 'planting' ? 'bg-green-500' : 'bg-orange-500';
     
-    const segments = [];
-    let currentStart = start;
-    
-    while (currentStart <= end) {
-      const segmentEnd = Math.min(end, currentStart === start ? end : currentStart);
-      const width = ((segmentEnd - currentStart + 1) / 12) * 100;
-      const left = (currentStart / 12) * 100;
+    // Create a block for each month, using the same flex layout as headers
+    return months.map((_, monthIndex) => {
+      const isInRange = monthIndex >= start && monthIndex <= end;
       
-      segments.push(
-        <div
-          key={`${crop.crop}-${type}-${currentStart}`}
-          className={`absolute h-4 ${color} rounded-sm opacity-80`}
-          style={{
-            left: `${left}%`,
-            width: `${width}%`
-          }}
-        />
+      return (
+        <div key={`${crop.crop}-${type}-${monthIndex}`} className="flex-1 px-1">
+          {isInRange && (
+            <div className={`h-4 ${color} rounded-sm opacity-80`} />
+          )}
+        </div>
       );
-      currentStart = segmentEnd + 1;
-    }
-    
-    return segments;
+    });
   };
   
   const handleAddCrop = async () => {
     // Add new crop to the database
     if (convexUser) {
       try {
+        const cropType = 'tomato'; // Default to tomato, user can edit later
+        const optimalSeasons = getOptimalSeasons(cropType);
+        const currentYear = new Date().getFullYear();
+        
+        // Convert month indices to actual dates
+        const plantingMonth = optimalSeasons.plantingStart;
+        const harvestMonth = optimalSeasons.harvestStart;
+        
+        // Adjust year for harvest if it's in the following year
+        const harvestYear = harvestMonth < plantingMonth ? currentYear + 1 : currentYear;
+        
+        const plantingDate = new Date(currentYear, plantingMonth, 15).toISOString().split('T')[0];
+        const harvestDate = new Date(harvestYear, harvestMonth, 15).toISOString().split('T')[0];
+        
         await addCrop({
           userId: convexUser._id,
           name: `New Crop ${cropData.length + 1}`,
-          type: `newcrop${cropData.length + 1}`.toLowerCase(),
+          type: cropType,
+          category: 'vegetables',
           status: "planned",
+          plantingDate,
+          expectedHarvestDate: harvestDate,
         });
       } catch (error) {
         console.error(`Error adding crop:`, error);
       }
     }
-    
-    // Update the crop data state with added crop
-    const newCrop: CropSeason = {
-      crop: `New Crop ${cropData.length + 1}`,
-      icon: <div className="w-2 h-2 bg-green-500 rounded-full" />,
-      plantingStart: 0,
-      plantingEnd: 2,
-      harvestStart: 6,
-      harvestEnd: 8
-    };
-    setCropData(prev => [...prev, newCrop]);
   };
   
-  const handleRemoveCrop = (cropName: string) => {
-    setCropData(prev => prev.filter(crop => crop.crop !== cropName));
+  const handleRemoveCrop = async (cropName: string) => {
+    if (!crops?.length) return;
+    
+    // Find the crop in the database by name
+    const cropToDelete = crops.find((crop: any) => 
+      crop.name.toLowerCase() === cropName.toLowerCase()
+    );
+    
+    if (!cropToDelete) {
+      console.error('Crop not found:', cropName);
+      return;
+    }
+    
+    try {
+      // Delete the crop from the database
+      await deleteCrop({ id: cropToDelete._id });
+      
+      // The UI will automatically update through the useEffect that watches the crops data
+    } catch (error) {
+      console.error('Error deleting crop:', error);
+    }
   };
 
   const containerClass = isFullPage ? "h-screen" : "h-80";
@@ -200,37 +303,24 @@ export const GanttCropCalendar = ({ isFullPage = false }: GanttCropCalendarProps
 
       <CardContent className="p-0 flex-1 overflow-hidden">
         <div className="h-full flex flex-col">
-          {/* Header with months and settings */}
-          <div className="flex border-b bg-gray-50">
-            <div className="w-32 p-2 border-r bg-gray-100 flex items-center justify-center">
-              <Settings className="w-4 h-4 text-gray-600" />
-            </div>
-            {months.map((month, index) => (
-              <div key={month} className="flex-1 p-2 text-center text-xs font-medium text-gray-600 border-r">
-                {month}
-              </div>
-            ))}
-          </div>
-
-          {/* Weather row */}
-          <div className="flex border-b bg-gray-50">
-            <div className="w-32 p-2 border-r text-xs font-medium text-gray-600 flex items-center">
-              <Sun className="w-4 h-4 mr-1" />
-              WEATHER
-            </div>
-            {weatherData.map((weather, index) => (
-              <div key={index} className="flex-1 p-2 text-center border-r flex flex-col items-center justify-center">
-                {weather.icon}
-                <span className="text-xs text-gray-600 mt-1">{weather.temp}°</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Crops */}
+          {/* Grid container using CSS Grid for perfect alignment */}
           <div className="flex-1 overflow-y-auto">
+            {/* Header row */}
+            <div className="grid border-b bg-gray-50" style={{ gridTemplateColumns: '8rem repeat(12, 1fr)' }}>
+              <div className="p-2 border-r bg-gray-100 flex items-center justify-center">
+                <span className="text-xs font-medium text-gray-600">CROPS</span>
+              </div>
+              {months.map((month, index) => (
+                <div key={month} className="p-1 text-center text-xs font-medium text-gray-600 border-r last:border-r-0">
+                  {month}
+                </div>
+              ))}
+            </div>
+
+            {/* Crop rows */}
             {cropData.map((crop, index) => (
-              <div key={crop.crop} className="flex border-b hover:bg-gray-50 transition-colors">
-                <div className="w-32 p-3 border-r bg-white flex items-center space-x-2">
+              <div key={crop.crop} className="grid border-b hover:bg-gray-50 transition-colors" style={{ gridTemplateColumns: '8rem repeat(12, 1fr)', minHeight: '48px' }}>
+                <div className="p-3 border-r bg-white flex items-center space-x-2">
                   {crop.icon}
                   <span className="text-xs font-medium text-gray-700 truncate">
                     {crop.crop}
@@ -246,42 +336,22 @@ export const GanttCropCalendar = ({ isFullPage = false }: GanttCropCalendarProps
                     </Button>
                   )}
                 </div>
-                <div className="flex-1 relative" style={{ minHeight: '48px' }}>
-                  <div className="absolute inset-0 flex">
-                    {months.map((_, monthIndex) => (
-                      <div key={monthIndex} className="flex-1 border-r border-gray-200" />
-                    ))}
+                {months.map((_, monthIndex) => (
+                  <div key={monthIndex} className="border-r border-gray-200 last:border-r-0 relative flex items-center justify-center">
+                    {/* Planting segment for this month */}
+                    {crop.plantingStart <= monthIndex && monthIndex <= crop.plantingEnd && (
+                      <div className="absolute top-1 left-1 right-1 h-4 bg-green-500 rounded-sm opacity-80" />
+                    )}
+                    {/* Harvesting segment for this month */}
+                    {crop.harvestStart <= monthIndex && monthIndex <= crop.harvestEnd && (
+                      <div className="absolute bottom-1 left-1 right-1 h-4 bg-orange-500 rounded-sm opacity-80" />
+                    )}
                   </div>
-                  <div className="absolute inset-0 p-2">
-                    {renderBar(crop, 'planting')}
-                    {renderBar(crop, 'harvest')}
-                  </div>
-                </div>
+                ))}
               </div>
             ))}
           </div>
 
-          {/* Weather forecast at bottom if full page */}
-          {isFullPage && (
-            <div className="border-t bg-gray-900 text-white p-4">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center space-x-2">
-                  <Sun className="w-6 h-6 text-yellow-400" />
-                  <div>
-                    <div className="text-lg font-bold">24°C</div>
-                    <div className="text-xs text-gray-400">Mostly Sunny</div>
-                  </div>
-                </div>
-                <div className="flex space-x-4 text-xs">
-                  <div className="flex items-center space-x-1">
-                    <Droplets className="w-4 h-4" />
-                    <span>65% Humidity</span>
-                  </div>
-                  <div>Wind: 12 km/h</div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </CardContent>
     </Card>

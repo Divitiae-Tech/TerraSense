@@ -43,10 +43,10 @@ import {
  */
 
 const WeatherDashboard = () => {
-  const [weatherData, setWeatherData] = useState(null);
+  const [weatherData, setWeatherData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [lastUpdated, setLastUpdated] = useState(null);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [calendarOpen, setCalendarOpen] = useState(false);
 
@@ -73,7 +73,7 @@ const WeatherDashboard = () => {
       setLastUpdated(new Date());
       setError(null);
     } catch (err) {
-      setError(err.message);
+      setError(err instanceof Error ? err.message : 'Unknown error');
       console.error('Error fetching weather data:', err);
     } finally {
       setLoading(false);
@@ -97,7 +97,7 @@ const WeatherDashboard = () => {
     }
     
     // Find forecast for selected date
-    const daysDifference = Math.ceil((selectedDate - today) / (1000 * 60 * 60 * 24));
+    const daysDifference = Math.ceil((selectedDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     const forecastDay = weatherData.forecast[daysDifference];
     
     if (forecastDay) {

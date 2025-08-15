@@ -14,6 +14,7 @@ import type {
   FunctionReference,
 } from "convex/server";
 import type * as aiAssistant from "../aiAssistant.js";
+import type * as database from "../database.js";
 import type * as users from "../users.js";
 
 /**
@@ -26,6 +27,7 @@ import type * as users from "../users.js";
  */
 declare const fullApi: ApiFromModules<{
   aiAssistant: typeof aiAssistant;
+  database: typeof database;
   users: typeof users;
 }>;
 export declare const api: FilterApi<

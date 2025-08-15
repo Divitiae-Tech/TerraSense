@@ -61,33 +61,6 @@ users: defineTable({
     .index("by_type", ["type"])
     .index("by_user_and_status", ["userId", "status"]),
 
-  // Detailed crop planning and calendars
-  cropCalendars: defineTable({
-    cropId: v.id("crops"),
-    userId: v.id("users"),
-    season: v.string(), // e.g., "2024-spring", "2024-fall"
-    schedule: v.array(
-      v.object({
-        date: v.string(), // ISO date
-        action: v.string(), // "planting", "fertilizing", "watering", "pesticide", "harvesting"
-        description: v.optional(v.string()),
-        completed: v.boolean(),
-        weather: v.optional(v.object({
-          temperature: v.optional(v.number()),
-          rainfall: v.optional(v.number()),
-          humidity: v.optional(v.number()),
-        })),
-        reminder: v.optional(v.string()),
-        cost: v.optional(v.number()),
-      })
-    ),
-    totalEstimatedCost: v.optional(v.number()),
-    createdAt: v.number(),
-    updatedAt: v.optional(v.number()),
-  })
-    .index("by_crop", ["cropId"])
-    .index("by_user", ["userId"])
-    .index("by_season", ["season"]),
 
   // Soil data and environmental conditions
   soilData: defineTable({
@@ -240,9 +213,8 @@ weatherData: defineTable({
   
   // Location data from API
   location: v.object({
-    lat: v.string(), // e.g., "26.2041S"
-    lon: v.string(), // e.g., "28.0473E"
-    elevation: v.number(), // in meters
+    lat: v.number(), // latitude as number
+    lon: v.number(), // longitude as number
     timezone: v.string(), // e.g., "Africa/Johannesburg"
   }),
   
@@ -251,65 +223,110 @@ weatherData: defineTable({
   
   // Current weather conditions
   current: v.object({
-    icon: v.string(), // e.g., "sunny"
-    icon_num: v.number(), // e.g., 2
-    summary: v.string(), // e.g., "Sunny"
     temperature: v.number(), // current temperature
+    cloudCover: v.number(), // cloud coverage percentage
     wind: v.object({
       speed: v.number(), // wind speed
-      angle: v.number(), // wind angle in degrees
-      dir: v.string(), // wind direction (N, NE, etc.)
+      direction: v.number(), // wind direction in degrees
     }),
     precipitation: v.object({
       total: v.number(), // precipitation amount
       type: v.string(), // "none", "rain", "snow", etc.
     }),
-    cloud_cover: v.number(), // cloud coverage percentage
+    condition: v.object({
+      code: v.string(), // e.g., "overcast"
+      icon: v.string(), // e.g., "cloudy"
+      summary: v.string(), // e.g., "Overcast"
+    }),
+    sunlight: v.object({
+      sunrise: v.union(v.string(), v.null()), // sunrise time or null
+      sunset: v.union(v.string(), v.null()), // sunset time or null
+    }),
+    timestamp: v.string(), // ISO timestamp
   }),
   
   // Daily forecast data
   daily: v.optional(v.object({
     data: v.array(v.object({
-      day: v.string(), // ISO date string "2025-08-11"
-      weather: v.string(), // weather condition
-      icon: v.number(), // weather icon number
-      summary: v.string(), // detailed summary
-      all_day: v.object({
-        weather: v.string(),
-        icon: v.number(),
-        temperature: v.number(), // average temperature
-        temperature_min: v.number(), // minimum temperature
-        temperature_max: v.number(), // maximum temperature
-        wind: v.object({
-          speed: v.number(),
-          dir: v.string(),
-          angle: v.number(),
-        }),
-        cloud_cover: v.object({
-          total: v.number(), // cloud coverage percentage
-        }),
-        precipitation: v.object({
-          total: v.number(),
-          type: v.string(),
-        }),
+      date: v.string(), // ISO date string "2025-08-15"
+      temperature: v.object({
+        min: v.optional(v.number()), // minimum temperature
+        max: v.optional(v.number()), // maximum temperature
       }),
-      // These can be null in the API response
-      morning: v.optional(v.any()), // Can be detailed object or null
-      afternoon: v.optional(v.any()), // Can be detailed object or null
-      evening: v.optional(v.any()), // Can be detailed object or null
+      humidity: v.optional(v.object({
+        min: v.optional(v.number()),
+        max: v.optional(v.number()),
+      })),
+      precipitation: v.object({
+        total: v.optional(v.number()),
+        probability: v.optional(v.number()),
+      }),
+      condition: v.object({
+        summary: v.optional(v.string()),
+        icon: v.optional(v.string()),
+        code: v.optional(v.string()),
+      }),
+      sunlight: v.optional(v.object({
+        sunrise: v.optional(v.string()),
+        sunset: v.optional(v.string()),
+      })),
     }))
   })),
   
-  // Hourly data (null in your example but may be available)
-  hourly: v.optional(v.any()), // Can be array of hourly data or null
+  // Hourly forecast data
+  hourly: v.optional(v.array(v.object({
+    timestamp: v.string(),
+    temperature: v.optional(v.number()),
+    feelsLike: v.optional(v.number()),
+    humidity: v.optional(v.number()),
+    dewPoint: v.optional(v.number()),
+    pressure: v.optional(v.number()),
+    cloudCover: v.optional(v.number()),
+    wind: v.optional(v.object({
+      speed: v.optional(v.number()),
+      direction: v.optional(v.number()),
+    })),
+    precipitation: v.optional(v.object({
+      total: v.optional(v.number()),
+      probability: v.optional(v.number()),
+    })),
+    condition: v.optional(v.object({
+      summary: v.optional(v.string()),
+      icon: v.optional(v.string()),
+      code: v.optional(v.string()),
+    })),
+  }))),
   
+  // Additional derived analytics data
+  derived: v.optional(v.object({
+    temperatureRange: v.optional(v.number()),
+    pressureTrend: v.optional(v.object({
+      direction: v.optional(v.string()),
+    })),
+    humidityTrend: v.optional(v.object({
+      direction: v.optional(v.string()),
+    })),
+    windConsistency: v.optional(v.object({
+      averageSpeed: v.optional(v.number()),
+    })),
+    precipitationPattern: v.optional(v.object({
+      hoursWithRain: v.optional(v.number()),
+    })),
+    weatherStability: v.optional(v.object({
+      temperatureStability: v.optional(v.string()),
+    })),
+    seasonalContext: v.optional(v.object({
+      season: v.optional(v.string()),
+    })),
+  })),
+
   // Metadata
   source: v.optional(v.string()), // API source identifier
-  dataType: v.union(
+  dataType: v.optional(v.union(
     v.literal("current"),
     v.literal("forecast"), 
     v.literal("current_and_forecast")
-  ),
+  )),
   createdAt: v.number(),
   expiresAt: v.optional(v.number()), // For caching weather data
   
@@ -392,6 +409,37 @@ weatherData: defineTable({
     .index("by_user", ["userId"])
     .index("by_crop", ["cropId"])
     .index("by_date", ["date"]),
+
+  // Seed and supply stock management
+  seedStock: defineTable({
+    userId: v.id("users"),
+    name: v.string(), // name of the seed/supply
+    type: v.union(
+      v.literal("seeds"),
+      v.literal("fertilizer"),
+      v.literal("pesticide"),
+      v.literal("equipment"),
+      v.literal("other")
+    ),
+    category: v.optional(v.string()), // specific category like "vegetable_seeds", "organic_fertilizer"
+    variety: v.optional(v.string()), // specific variety for seeds
+    currentStock: v.number(), // current amount in stock
+    maxCapacity: v.number(), // maximum storage capacity
+    unit: v.string(), // "kg", "liters", "bags", "units"
+    minThreshold: v.optional(v.number()), // minimum stock level before reorder
+    costPerUnit: v.optional(v.number()), // cost per unit
+    supplier: v.optional(v.string()), // supplier information
+    expiryDate: v.optional(v.string()), // ISO date for perishable items
+    batchNumber: v.optional(v.string()), // batch/lot number for tracking
+    location: v.optional(v.string()), // storage location
+    notes: v.optional(v.string()),
+    lastUpdated: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_type", ["type"])
+    .index("by_user_and_type", ["userId", "type"])
+    .index("by_low_stock", ["userId", "currentStock"]),
 });
 
 export default schema;

@@ -111,12 +111,6 @@ export default function DashboardPage() {
     { month: 'Jun', harvest: 280, growth: 52 }
   ];
 
-  const seedStockData = [
-    { name: 'Tomato Seeds', current: 85, max: 100 },
-    { name: 'Corn Seeds', current: 60, max: 100 },
-    { name: 'Wheat Seeds', current: 40, max: 100 },
-    { name: 'Fertilizer', current: 25, max: 100 }
-  ];
 
   const aiPrompts = [
     "What's the optimal watering schedule for my current crops?",
@@ -152,7 +146,13 @@ export default function DashboardPage() {
               <GanttCropCalendar />
             </div>
             <div className="lg:col-span-1">
-              <AIAssistant aiPrompts={aiPrompts} />
+              <AIAssistant 
+                aiPrompts={aiPrompts}
+                messages={messages}
+                isLoading={isLoading}
+                error={error}
+                handleSubmit={handleSubmit}
+              />
             </div>
           </div>
           <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -176,7 +176,7 @@ export default function DashboardPage() {
               )}
             </div>
             <div className="lg:col-span-1">
-              <SeedStock seedStockData={seedStockData} />
+              <SeedStock />
             </div>
             <div className="lg:col-span-1">
               <HarvestGrowthChart harvestData={harvestData} />
