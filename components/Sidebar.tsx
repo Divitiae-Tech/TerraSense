@@ -67,7 +67,7 @@ const sidebarItems = [
       },
       {
         title: 'Soil & Crop',
-        href: '/admin/dashboard/soil-crop',
+        href: '/admin/dashboard/soil-analysis',
         icon: Wheat,
       },
       {
