@@ -428,6 +428,45 @@ weatherData: defineTable({
     .index("by_user", ["userId"])
     .index("by_crop", ["cropId"])
     .index("by_date", ["date"]),
+
+  // Fields with crop areas for mapping
+  fields: defineTable({
+    userId: v.id("users"),
+    name: v.string(),
+    description: v.optional(v.string()),
+    totalArea: v.number(), // in hectares
+    location: v.object({
+      latitude: v.number(),
+      longitude: v.number(),
+    }),
+    boundaries: v.array(v.object({
+      latitude: v.number(),
+      longitude: v.number(),
+    })),
+    cropAreas: v.array(v.object({
+      id: v.string(),
+      name: v.string(),
+      cropType: v.string(),
+      area: v.number(), // in hectares
+      coordinates: v.array(v.object({
+        latitude: v.number(),
+        longitude: v.number(),
+      })),
+      plantingDate: v.optional(v.string()),
+      expectedHarvestDate: v.optional(v.string()),
+      status: v.union(
+        v.literal("planned"),
+        v.literal("planted"),
+        v.literal("growing"),
+        v.literal("ready_to_harvest"),
+        v.literal("harvested")
+      ),
+      notes: v.optional(v.string()),
+    })),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"]),
 });
 
 export default schema;
