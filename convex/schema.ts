@@ -207,151 +207,126 @@ users: defineTable({
     .index("by_price", ["pricePerUnit"]),
 
   // Enhanced weather data integration
-// Updated weatherData table to match the new API response format
-// Enhanced weatherData table to match the merged Meteosource + Open-Meteo API response
-weatherData: defineTable({
-  userId: v.id("users"),
-
-  // Location from API
-  location: v.object({
-    lat: v.number(), // latitude as number
-    lon: v.number(), // longitude as number
-    timezone: v.string(), // e.g., "Africa/Johannesburg"
-  }),
-
-  units: v.string(), // "metric" or "imperial"
-
-  // Current weather
-  current: v.object({
-    temperature: v.number(), // current temperature
-    cloudCover: v.number(), // cloud coverage percentage
-    wind: v.object({
-      speed: v.number(), // wind speed
-      direction: v.number(), // wind direction in degrees
+  weatherData: defineTable({
+    userId: v.id("users"),
+    // Location from API
+    location: v.object({
+      lat: v.number(), // latitude as number
+      lon: v.number(), // longitude as number
+      timezone: v.string(), // e.g., "Africa/Johannesburg"
     }),
-    precipitation: v.object({
-      total: v.number(), // precipitation amount
-      type: v.string(), // "none", "rain", "snow", etc.
-    }),
-    condition: v.object({
-      code: v.string(), // e.g., "overcast"
-      icon: v.string(), // e.g., "cloudy"
-      summary: v.string(), // e.g., "Overcast"
-    }),
-    sunlight: v.object({
-      sunrise: v.union(v.string(), v.null()), // sunrise time or null
-      sunset: v.union(v.string(), v.null()), // sunset time or null
-    }),
-    timestamp: v.string(), // ISO timestamp
-  }),
-  precipitation: v.object({
-    total: v.optional(v.union(v.number(), v.null())),
-    probability: v.optional(v.union(v.number(), v.null())),
-    type: v.optional(v.union(v.string(), v.null())),
-  }),
-  condition: v.object({
-    summary: v.optional(v.union(v.string(), v.null())),
-    icon: v.optional(v.union(v.string(), v.null())),
-    code: v.union(v.number(), v.string(), v.null())
-  }),
-  sunlight: v.object({
-    sunrise: v.optional(v.union(v.string(), v.null())),
-    sunset: v.optional(v.union(v.string(), v.null())),
-  })
-}),
-
-
-  // Daily forecast
-  daily: v.optional(v.object({
-    data: v.array(v.object({
-      date: v.string(), // ISO date string "2025-08-15"
-      temperature: v.object({
-        min: v.optional(v.number()), // minimum temperature
-        max: v.optional(v.number()), // maximum temperature
+    units: v.string(), // "metric" or "imperial"
+    // Current weather
+    current: v.object({
+      temperature: v.number(), // current temperature
+      cloudCover: v.number(), // cloud coverage percentage
+      wind: v.object({
+        speed: v.number(), // wind speed
+        direction: v.number(), // wind direction in degrees
       }),
-      humidity: v.optional(v.object({
-        min: v.optional(v.number()),
-        max: v.optional(v.number()),
-      })),
       precipitation: v.object({
-        total: v.optional(v.number()),
-        probability: v.optional(v.number()),
+        total: v.number(), // precipitation amount
+        type: v.string(), // "none", "rain", "snow", etc.
       }),
       condition: v.object({
+        code: v.string(), // e.g., "overcast"
+        icon: v.string(), // e.g., "cloudy"
+        summary: v.string(), // e.g., "Overcast"
+      }),
+      sunlight: v.object({
+        sunrise: v.union(v.string(), v.null()), // sunrise time or null
+        sunset: v.union(v.string(), v.null()), // sunset time or null
+      }),
+      timestamp: v.string(), // ISO timestamp
+    }),
+    // Daily forecast
+    daily: v.optional(v.object({
+      data: v.array(v.object({
+        date: v.string(), // ISO date string "2025-08-15"
+        temperature: v.object({
+          min: v.optional(v.number()), // minimum temperature
+          max: v.optional(v.number()), // maximum temperature
+        }),
+        humidity: v.optional(v.object({
+          min: v.optional(v.number()),
+          max: v.optional(v.number()),
+        })),
+        precipitation: v.object({
+          total: v.optional(v.number()),
+          probability: v.optional(v.number()),
+        }),
+        condition: v.object({
+          summary: v.optional(v.string()),
+          icon: v.optional(v.string()),
+          code: v.optional(v.string()),
+        }),
+        sunlight: v.optional(v.object({
+          sunrise: v.optional(v.string()),
+          sunset: v.optional(v.string()),
+        })),
+      }))
+    })),
+    // Hourly forecast data
+    hourly: v.optional(v.array(v.object({
+      timestamp: v.string(),
+      temperature: v.optional(v.number()),
+      feelsLike: v.optional(v.number()),
+      humidity: v.optional(v.number()),
+      dewPoint: v.optional(v.number()),
+      pressure: v.optional(v.number()),
+      cloudCover: v.optional(v.number()),
+      wind: v.optional(v.object({
+        speed: v.optional(v.number()),
+        direction: v.optional(v.number()),
+      })),
+      precipitation: v.optional(v.object({
+        total: v.optional(v.number()),
+        probability: v.optional(v.number()),
+      })),
+      condition: v.optional(v.object({
         summary: v.optional(v.string()),
         icon: v.optional(v.string()),
         code: v.optional(v.string()),
-      }),
-      sunlight: v.optional(v.object({
-        sunrise: v.optional(v.string()),
-        sunset: v.optional(v.string()),
       })),
-    }))
-  })),
-  
-  // Hourly forecast data
-  hourly: v.optional(v.array(v.object({
-    timestamp: v.string(),
-    temperature: v.optional(v.number()),
-    feelsLike: v.optional(v.number()),
-    humidity: v.optional(v.number()),
-    dewPoint: v.optional(v.number()),
-    pressure: v.optional(v.number()),
-    cloudCover: v.optional(v.number()),
-    wind: v.optional(v.object({
-      speed: v.optional(v.number()),
-      direction: v.optional(v.number()),
+    }))),
+    // Additional derived analytics data
+    derived: v.optional(v.object({
+      temperatureRange: v.optional(v.number()),
+      pressureTrend: v.optional(v.object({
+        direction: v.optional(v.string()),
+      })),
+      humidityTrend: v.optional(v.object({
+        direction: v.optional(v.string()),
+      })),
+      windConsistency: v.optional(v.object({
+        averageSpeed: v.optional(v.number()),
+      })),
+      precipitationPattern: v.optional(v.object({
+        hoursWithRain: v.optional(v.number()),
+      })),
+      weatherStability: v.optional(v.object({
+        temperatureStability: v.optional(v.string()),
+      })),
+      seasonalContext: v.optional(v.object({
+        season: v.optional(v.string()),
+      })),
     })),
-    precipitation: v.optional(v.object({
-      total: v.optional(v.number()),
-      probability: v.optional(v.number()),
-    })),
-    condition: v.optional(v.object({
-      summary: v.optional(v.string()),
-      icon: v.optional(v.string()),
-      code: v.optional(v.string()),
-    })),
-  }))),
-  
-  // Additional derived analytics data
-  derived: v.optional(v.object({
-    temperatureRange: v.optional(v.number()),
-    pressureTrend: v.optional(v.object({
-      direction: v.optional(v.string()),
-    })),
-    humidityTrend: v.optional(v.object({
-      direction: v.optional(v.string()),
-    })),
-    windConsistency: v.optional(v.object({
-      averageSpeed: v.optional(v.number()),
-    })),
-    precipitationPattern: v.optional(v.object({
-      hoursWithRain: v.optional(v.number()),
-    })),
-    weatherStability: v.optional(v.object({
-      temperatureStability: v.optional(v.string()),
-    })),
-    seasonalContext: v.optional(v.object({
-      season: v.optional(v.string()),
-    })),
-  })),
-
-  // Metadata
-  source: v.optional(v.string()), // API source identifier
-  dataType: v.optional(v.union(
-    v.literal("current"),
-    v.literal("forecast"), 
-    v.literal("current_and_forecast")
-  )),
-  createdAt: v.number(),
-  expiresAt: v.optional(v.number()),
-  query: v.optional(v.string()),
-  requestType: v.optional(v.string())
-})
-  .index("by_user", ["userId"])
-  .index("by_location", ["location.lat", "location.lon"])
-  .index("by_created_at", ["createdAt"])
-  .index("by_expires_at", ["expiresAt"]),
+    // Metadata
+    source: v.optional(v.string()), // API source identifier
+    dataType: v.optional(v.union(
+      v.literal("current"),
+      v.literal("forecast"), 
+      v.literal("current_and_forecast")
+    )),
+    createdAt: v.number(),
+    expiresAt: v.optional(v.number()),
+    query: v.optional(v.string()),
+    requestType: v.optional(v.string())
+  })
+    .index("by_user", ["userId"])
+    .index("by_location", ["location.lat", "location.lon"])
+    .index("by_created_at", ["createdAt"])
+    .index("by_expires_at", ["expiresAt"]),
 
   // AI recommendations and insights
   recommendations: defineTable({
@@ -461,6 +436,29 @@ weatherData: defineTable({
     updatedAt: v.number(),
   })
     .index("by_user", ["userId"]),
+
+  // Seed stock management
+  seedStock: defineTable({
+    userId: v.id("users"),
+    name: v.string(),
+    variety: v.optional(v.string()),
+    type: v.string(), // "seeds", "seedlings", "bulbs", etc.
+    currentStock: v.number(),
+    unit: v.string(), // "kg", "packets", "pieces", etc.
+    minThreshold: v.optional(v.number()),
+    maxCapacity: v.optional(v.number()),
+    purchaseDate: v.optional(v.string()),
+    expiryDate: v.optional(v.string()),
+    supplier: v.optional(v.string()),
+    costPerUnit: v.optional(v.number()),
+    storageLocation: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    lastUpdated: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_type", ["type"])
+    .index("by_expiry", ["expiryDate"]),
 });
 
 export default schema;

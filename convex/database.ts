@@ -530,6 +530,7 @@ export const createSeedStock = mutation({
     return await ctx.db.insert("seedStock", {
       ...args,
       createdAt: Date.now(),
+      lastUpdated: Date.now(),
     });
   },
 });
@@ -573,7 +574,7 @@ export const getLowStockItems = query({
       .collect();
     
     return allStock.filter(item => {
-      const threshold = item.minThreshold || (item.maxCapacity * 0.2);
+      const threshold = item.minThreshold || ((item.maxCapacity || 100) * 0.2);
       return item.currentStock <= threshold;
     });
   },
@@ -687,7 +688,8 @@ export const initializeSeedStockForUser = mutation({
       ctx.db.insert("seedStock", {
         ...item,
         userId,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        lastUpdated: Date.now()
       })
     );
 
