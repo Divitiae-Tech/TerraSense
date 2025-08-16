@@ -423,36 +423,44 @@ weatherData: defineTable({
     .index("by_crop", ["cropId"])
     .index("by_date", ["date"]),
 
-  // Seed and supply stock management
-  seedStock: defineTable({
+  // Fields with crop areas for mapping
+  fields: defineTable({
     userId: v.id("users"),
-    name: v.string(), // name of the seed/supply
-    type: v.union(
-      v.literal("seeds"),
-      v.literal("fertilizer"),
-      v.literal("pesticide"),
-      v.literal("equipment"),
-      v.literal("other")
-    ),
-    category: v.optional(v.string()), // specific category like "vegetable_seeds", "organic_fertilizer"
-    variety: v.optional(v.string()), // specific variety for seeds
-    currentStock: v.number(), // current amount in stock
-    maxCapacity: v.number(), // maximum storage capacity
-    unit: v.string(), // "kg", "liters", "bags", "units"
-    minThreshold: v.optional(v.number()), // minimum stock level before reorder
-    costPerUnit: v.optional(v.number()), // cost per unit
-    supplier: v.optional(v.string()), // supplier information
-    expiryDate: v.optional(v.string()), // ISO date for perishable items
-    batchNumber: v.optional(v.string()), // batch/lot number for tracking
-    location: v.optional(v.string()), // storage location
-    notes: v.optional(v.string()),
-    lastUpdated: v.optional(v.number()),
+    name: v.string(),
+    description: v.optional(v.string()),
+    totalArea: v.number(), // in hectares
+    location: v.object({
+      latitude: v.number(),
+      longitude: v.number(),
+    }),
+    boundaries: v.array(v.object({
+      latitude: v.number(),
+      longitude: v.number(),
+    })),
+    cropAreas: v.array(v.object({
+      id: v.string(),
+      name: v.string(),
+      cropType: v.string(),
+      area: v.number(), // in hectares
+      coordinates: v.array(v.object({
+        latitude: v.number(),
+        longitude: v.number(),
+      })),
+      plantingDate: v.optional(v.string()),
+      expectedHarvestDate: v.optional(v.string()),
+      status: v.union(
+        v.literal("planned"),
+        v.literal("planted"),
+        v.literal("growing"),
+        v.literal("ready_to_harvest"),
+        v.literal("harvested")
+      ),
+      notes: v.optional(v.string()),
+    })),
     createdAt: v.number(),
+    updatedAt: v.number(),
   })
-    .index("by_user", ["userId"])
-    .index("by_type", ["type"])
-    .index("by_user_and_type", ["userId", "type"])
-    .index("by_low_stock", ["userId", "currentStock"]),
+    .index("by_user", ["userId"]),
 });
 
 export default schema;

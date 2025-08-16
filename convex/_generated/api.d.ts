@@ -14,7 +14,8 @@ import type {
   FunctionReference,
 } from "convex/server";
 import type * as aiAssistant from "../aiAssistant.js";
-import type * as database from "../database.js";
+import type * as fields from "../fields.js";
+import type * as soilData from "../soilData.js";
 import type * as users from "../users.js";
 import type * as weatherData from "../weatherData.js";
 
@@ -28,7 +29,8 @@ import type * as weatherData from "../weatherData.js";
  */
 declare const fullApi: ApiFromModules<{
   aiAssistant: typeof aiAssistant;
-  database: typeof database;
+  fields: typeof fields;
+  soilData: typeof soilData;
   users: typeof users;
   weatherData: typeof weatherData;
 }>;

@@ -67,3 +67,43 @@ export const getUserByClerkId = query({
     return user;
   },
 });
+
+export const createTestUser = mutation({
+  args: {},
+  handler: async (ctx) => {
+    // Check if test user already exists
+    const existingUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", "test-user-clerk-id"))
+      .first();
+
+    if (existingUser) {
+      return existingUser._id;
+    }
+
+    // Create test user
+    const userId = await ctx.db.insert("users", {
+      clerkId: "test-user-clerk-id",
+      email: "test@farmer.com",
+      name: "Test Farmer",
+      role: "farmer",
+      location: "Test Farm Location",
+      farmSize: 100,
+      createdAt: Date.now(),
+    });
+
+    return userId;
+  },
+});
+
+export const getTestUser = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", "test-user-clerk-id"))
+      .first();
+    
+    return user;
+  },
+});
