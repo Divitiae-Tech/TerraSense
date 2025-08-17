@@ -118,7 +118,7 @@ users: defineTable({
     .index("by_upload_date", ["uploadedAt"]),
 
   // Historical harvest data and yield tracking
-  harvests: defineTable({
+  cropHarvests: defineTable({
     cropId: v.id("crops"),
     userId: v.id("users"),
     season: v.string(),
@@ -156,55 +156,6 @@ users: defineTable({
     .index("by_season", ["season"])
     .index("by_harvest_date", ["harvestDate"]),
 
-  // Marketplace listings for selling produce
-  marketplaceListings: defineTable({
-    userId: v.id("users"),
-    cropId: v.optional(v.id("crops")), // Optional for processed products
-    title: v.string(),
-    description: v.optional(v.string()),
-    category: v.string(),
-    quantity: v.number(),
-    unit: v.string(), // "kg", "tons", "bags", "crates"
-    pricePerUnit: v.number(),
-    totalPrice: v.number(),
-    currency: v.optional(v.string()), // default to local currency
-    location: v.string(),
-    coordinates: v.optional(v.object({
-      latitude: v.number(),
-      longitude: v.number(),
-    })),
-    transportNeeds: v.optional(v.union(
-      v.literal("pickup_only"),
-      v.literal("delivery_available"),
-      v.literal("flexible")
-    )),
-    deliveryRadius: v.optional(v.number()), // in km
-    images: v.optional(v.array(v.string())), // image URLs
-    qualityGrade: v.optional(v.union(
-      v.literal("premium"),
-      v.literal("standard"),
-      v.literal("economy")
-    )),
-    harvestDate: v.optional(v.string()), // ISO date
-    expiryDate: v.optional(v.string()), // ISO date
-    organicCertified: v.optional(v.boolean()),
-    available: v.boolean(),
-    featured: v.optional(v.boolean()),
-    views: v.optional(v.number()),
-    contactMethod: v.optional(v.union(
-      v.literal("phone"),
-      v.literal("email"),
-      v.literal("platform_message")
-    )),
-    createdAt: v.number(),
-    updatedAt: v.optional(v.number()),
-  })
-    .index("by_user", ["userId"])
-    .index("by_category", ["category"])
-    .index("by_location", ["location"])
-    .index("by_available", ["available"])
-    .index("by_featured", ["featured"])
-    .index("by_price", ["pricePerUnit"]),
 
   // Enhanced weather data integration
   weatherData: defineTable({
@@ -328,39 +279,6 @@ users: defineTable({
     .index("by_created_at", ["createdAt"])
     .index("by_expires_at", ["expiresAt"]),
 
-  // AI recommendations and insights
-  recommendations: defineTable({
-    userId: v.id("users"),
-    cropId: v.optional(v.id("crops")),
-    type: v.union(
-      v.literal("planting"),
-      v.literal("fertilizing"),
-      v.literal("watering"),
-      v.literal("pest_control"),
-      v.literal("harvest_timing"),
-      v.literal("market_timing")
-    ),
-    title: v.string(),
-    description: v.string(),
-    priority: v.union(v.literal("low"), v.literal("medium"), v.literal("high")),
-    confidence: v.optional(v.number()), // 0-1
-    dueDate: v.optional(v.string()), // ISO date
-    estimatedImpact: v.optional(v.string()),
-    estimatedCost: v.optional(v.number()),
-    status: v.union(
-      v.literal("pending"),
-      v.literal("acknowledged"),
-      v.literal("implemented"),
-      v.literal("dismissed")
-    ),
-    feedback: v.optional(v.string()),
-    createdAt: v.number(),
-  })
-    .index("by_user", ["userId"])
-    .index("by_crop", ["cropId"])
-    .index("by_type", ["type"])
-    .index("by_priority", ["priority"])
-    .index("by_status", ["status"]),
 
   // Farm equipment and resources
   equipment: defineTable({
@@ -382,21 +300,6 @@ users: defineTable({
     .index("by_user", ["userId"])
     .index("by_status", ["status"]),
 
-  // Water usage and irrigation tracking
-  waterUsage: defineTable({
-    userId: v.id("users"),
-    cropId: v.optional(v.id("crops")),
-    date: v.string(), // ISO date
-    amount: v.number(), // liters
-    source: v.optional(v.string()), // "irrigation", "rainfall", "manual"
-    cost: v.optional(v.number()),
-    efficiency: v.optional(v.number()), // percentage
-    notes: v.optional(v.string()),
-    createdAt: v.number(),
-  })
-    .index("by_user", ["userId"])
-    .index("by_crop", ["cropId"])
-    .index("by_date", ["date"]),
 
   // Fields with crop areas for mapping
   fields: defineTable({
@@ -442,7 +345,13 @@ users: defineTable({
     userId: v.id("users"),
     name: v.string(),
     variety: v.optional(v.string()),
-    type: v.string(), // "seeds", "seedlings", "bulbs", etc.
+    type: v.union(
+      v.literal("seeds"),
+      v.literal("fertilizer"),
+      v.literal("pesticide"),
+      v.literal("equipment"),
+      v.literal("other")
+    ), // Type of seed stock item
     currentStock: v.number(),
     unit: v.string(), // "kg", "packets", "pieces", etc.
     minThreshold: v.optional(v.number()),
@@ -453,12 +362,140 @@ users: defineTable({
     costPerUnit: v.optional(v.number()),
     storageLocation: v.optional(v.string()),
     notes: v.optional(v.string()),
-    lastUpdated: v.number(),
+    lastUpdated: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_user", ["userId"])
     .index("by_type", ["type"])
     .index("by_expiry", ["expiryDate"]),
+
+  // Crop health analysis results from API
+  cropHealthAnalysis: defineTable({
+    userId: v.id("users"),
+    cropId: v.optional(v.id("crops")),
+    plantImageId: v.optional(v.id("plantImages")), // Link to associated plant image if any
+    analysisType: v.union(
+      v.literal("disease_detection"),
+      v.literal("nutrient_deficiency"),
+      v.literal("pest_identification"),
+      v.literal("growth_assessment"),
+      v.literal("general_health")
+    ),
+    apiProvider: v.string(), // "PlantNet", "PlantVillage", "custom_api", etc.
+    apiResponse: v.object({
+      rawData: v.any(), // Store the complete API response
+      confidence: v.optional(v.number()), // Overall confidence score 0-1
+      model: v.optional(v.string()), // API model version used
+      processingTime: v.optional(v.number()), // milliseconds
+    }),
+    detectedIssues: v.optional(v.array(v.object({
+      name: v.string(), // Disease/pest/issue name
+      scientificName: v.optional(v.string()),
+      category: v.union(
+        v.literal("disease"),
+        v.literal("pest"),
+        v.literal("nutrient_deficiency"),
+        v.literal("environmental_stress"),
+        v.literal("healthy")
+      ),
+      confidence: v.number(), // 0-1
+      severity: v.union(v.literal("low"), v.literal("medium"), v.literal("high")),
+      description: v.optional(v.string()),
+      symptoms: v.optional(v.array(v.string())),
+      causativeAgent: v.optional(v.string()),
+      affectedPlantParts: v.optional(v.array(v.string())),
+    }))),
+    treatmentRecommendations: v.optional(v.array(v.object({
+      treatment: v.string(),
+      type: v.union(
+        v.literal("chemical"),
+        v.literal("biological"),
+        v.literal("cultural"),
+        v.literal("mechanical"),
+        v.literal("preventive")
+      ),
+      priority: v.union(v.literal("low"), v.literal("medium"), v.literal("high"), v.literal("urgent")),
+      timeline: v.optional(v.string()), // "immediate", "within 24h", "weekly", etc.
+      estimatedCost: v.optional(v.number()),
+      effectiveness: v.optional(v.number()), // 0-1
+      applicationMethod: v.optional(v.string()),
+      frequency: v.optional(v.string()),
+      precautions: v.optional(v.array(v.string())),
+    }))),
+    preventiveMeasures: v.optional(v.array(v.object({
+      measure: v.string(),
+      type: v.union(
+        v.literal("crop_rotation"),
+        v.literal("sanitation"),
+        v.literal("resistant_varieties"),
+        v.literal("environmental_management"),
+        v.literal("monitoring")
+      ),
+      effectiveness: v.optional(v.number()), // 0-1
+      implementationCost: v.optional(v.number()),
+      season: v.optional(v.string()),
+    }))),
+    environmentalFactors: v.optional(v.object({
+      temperature: v.optional(v.object({
+        current: v.optional(v.number()),
+        optimal: v.optional(v.string()),
+        impact: v.optional(v.string()),
+      })),
+      humidity: v.optional(v.object({
+        current: v.optional(v.number()),
+        optimal: v.optional(v.string()),
+        impact: v.optional(v.string()),
+      })),
+      soilConditions: v.optional(v.object({
+        pH: v.optional(v.number()),
+        moisture: v.optional(v.string()),
+        recommendations: v.optional(v.array(v.string())),
+      })),
+    })),
+    healthScore: v.optional(v.object({
+      overall: v.number(), // 0-100
+      breakdown: v.optional(v.object({
+        diseaseResistance: v.optional(v.number()),
+        nutritionalStatus: v.optional(v.number()),
+        growthRate: v.optional(v.number()),
+        environmentalAdaptation: v.optional(v.number()),
+      })),
+    })),
+    followUpRecommendations: v.optional(v.array(v.object({
+      action: v.string(),
+      timeframe: v.string(),
+      priority: v.union(v.literal("low"), v.literal("medium"), v.literal("high")),
+      expectedOutcome: v.optional(v.string()),
+    }))),
+    location: v.optional(v.object({
+      latitude: v.number(),
+      longitude: v.number(),
+      fieldId: v.optional(v.string()),
+    })),
+    metadata: v.optional(v.object({
+      imageQuality: v.optional(v.string()),
+      lightingConditions: v.optional(v.string()),
+      plantGrowthStage: v.optional(v.string()),
+      weatherConditions: v.optional(v.string()),
+    })),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("reviewed")
+    ),
+    aiAssistantUsed: v.optional(v.boolean()), // Track if AI assistant has accessed this data
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_crop", ["cropId"])
+    .index("by_plant_image", ["plantImageId"])
+    .index("by_analysis_type", ["analysisType"])
+    .index("by_status", ["status"])
+    .index("by_created_at", ["createdAt"])
+    .index("by_ai_assistant_used", ["aiAssistantUsed"]),
 });
 
 export default schema;

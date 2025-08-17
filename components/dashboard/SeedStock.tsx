@@ -34,8 +34,9 @@ export const SeedStock = ({ userId }: SeedStockProps) => {
   );
 
   const getStockStatus = (percentage: number) => {
-    if (percentage > 70) return { variant: 'default' as const, text: 'Good' };
-    if (percentage > 30) return { variant: 'secondary' as const, text: 'Low' };
+    if (percentage > 70) return { variant: 'secondary' as const, text: 'Good' };
+    if (percentage > 50) return { variant: 'yellow' as const, text: 'Moderate' };
+    if (percentage > 30) return { variant: 'orange' as const, text: 'Low' };
     return { variant: 'destructive' as const, text: 'Critical' };
   };
 

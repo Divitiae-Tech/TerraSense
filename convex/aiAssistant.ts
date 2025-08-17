@@ -47,20 +47,12 @@ export const processAIRequest = mutation({
             response = "Plant image analysis completed";
             break;
           case "create_harvest":
-            actionResult = await ctx.db.insert("harvests", {
+            actionResult = await ctx.db.insert("cropHarvests", {
               userId,
               ...data,
               createdAt: Date.now(),
             });
             response = "Harvest data recorded successfully";
-            break;
-          case "create_marketplace_listing":
-            actionResult = await ctx.db.insert("marketplaceListings", {
-              userId,
-              ...data,
-              createdAt: Date.now(),
-            });
-            response = "Marketplace listing created successfully";
             break;
           case "create_weather_data":
             actionResult = await ctx.db.insert("weatherData", {
@@ -70,15 +62,6 @@ export const processAIRequest = mutation({
             });
             response = "Weather data updated";
             break;
-          case "create_recommendation":
-            actionResult = await ctx.db.insert("recommendations", {
-              userId,
-              ...data,
-              status: "pending",
-              createdAt: Date.now(),
-            });
-            response = "New recommendation added";
-            break;
           case "create_equipment":
             actionResult = await ctx.db.insert("equipment", {
               userId,
@@ -86,14 +69,6 @@ export const processAIRequest = mutation({
               createdAt: Date.now(),
             });
             response = `Equipment ${data.name} added to your inventory`;
-            break;
-          case "create_water_usage":
-            actionResult = await ctx.db.insert("waterUsage", {
-              userId,
-              ...data,
-              createdAt: Date.now(),
-            });
-            response = "Water usage data recorded";
             break;
           case "create_seed_stock":
             actionResult = await ctx.db.insert("seedStock", {
@@ -152,7 +127,7 @@ export const processAIRequest = mutation({
             response = "Record deleted successfully";
             break;
           default:
-            response = "Action not recognized. Available actions: create_crop, create_soil_data, create_plant_image, create_harvest, create_marketplace_listing, create_weather_data, create_recommendation, create_equipment, create_water_usage, create_seed_stock, update_seed_stock, adjust_stock, delete_seed_stock, update_crop_dates, update_record, delete_record";
+            response = "Action not recognized. Available actions: create_crop, create_soil_data, create_plant_image, create_harvest, create_weather_data, create_equipment, create_seed_stock, update_seed_stock, adjust_stock, delete_seed_stock, update_crop_dates, update_record, delete_record";
         }
       } catch (error) {
         response = `Error performing action: ${error}`;
@@ -179,12 +154,9 @@ export const getUserContext = query({
       crops,
       soilData,
       plantImages,
-      harvests,
-      marketplaceListings,
+      cropHarvests,
       weatherData,
-      recommendations,
       equipment,
-      waterUsage,
       seedStock
     ] = await Promise.all([
       ctx.db.query("users").filter(q => q.eq(q.field("_id"), userId)).first(),
@@ -192,12 +164,9 @@ export const getUserContext = query({
       ctx.db.query("crops").withIndex("by_user", q => q.eq("userId", userId)).collect(),
       ctx.db.query("soilData").withIndex("by_user", q => q.eq("userId", userId)).collect(),
       ctx.db.query("plantImages").withIndex("by_user", q => q.eq("userId", userId)).collect(),
-      ctx.db.query("harvests").withIndex("by_user", q => q.eq("userId", userId)).collect(),
-      ctx.db.query("marketplaceListings").withIndex("by_user", q => q.eq("userId", userId)).collect(),
+      ctx.db.query("cropHarvests").withIndex("by_user", q => q.eq("userId", userId)).collect(),
       ctx.db.query("weatherData").withIndex("by_user", q => q.eq("userId", userId)).collect(),
-      ctx.db.query("recommendations").withIndex("by_user", q => q.eq("userId", userId)).collect(),
       ctx.db.query("equipment").withIndex("by_user", q => q.eq("userId", userId)).collect(),
-      ctx.db.query("waterUsage").withIndex("by_user", q => q.eq("userId", userId)).collect(),
       ctx.db.query("seedStock").withIndex("by_user", q => q.eq("userId", userId)).collect()
     ]);
 
@@ -207,12 +176,9 @@ export const getUserContext = query({
       crops,
       soilData,
       plantImages,
-      harvests,
-      marketplaceListings,
+      cropHarvests,
       weatherData,
-      recommendations,
       equipment,
-      waterUsage,
       seedStock
     };
   },

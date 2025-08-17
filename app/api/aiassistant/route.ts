@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
 
         // Get all user farming data to provide context to the AI
         const userData = await convex.query(api.aiAssistant.getUserContext, { userId });
-        const { crops, soilData, weatherData, recommendations, seedStock } = userData;
+        const { crops, soilData, weatherData, seedStock } = userData;
 
         // Create a contextual system instruction for the AI
         const contextualInstruction = `
@@ -87,16 +87,26 @@ export async function POST(request: NextRequest) {
         [ADD_SEED_STOCK]name:type:currentStock:maxCapacity:unit[/ADD_SEED_STOCK]
         For example: [ADD_SEED_STOCK]Tomato Seeds:seeds:50:100:packets[/ADD_SEED_STOCK]
         
+        IMPORTANT: Do NOT include field names like "name:" or "type:" in the format. Use only the values separated by colons.
+        
         When a user asks to adjust existing stock (add or use seeds), use this format:
         [ADJUST_STOCK]stockId:adjustment:notes[/ADJUST_STOCK]
         For example: [ADJUST_STOCK]abc123:+25:Purchased new seeds[/ADJUST_STOCK] or [ADJUST_STOCK]abc123:-10:Used for planting[/ADJUST_STOCK]
         
+        When a user asks to change properties of existing seed stock (like unit, name, capacity), use this format:
+        [UPDATE_SEED_STOCK]stockId:field:newValue[/UPDATE_SEED_STOCK]
+        For example: [UPDATE_SEED_STOCK]abc123:unit:kg[/UPDATE_SEED_STOCK] or [UPDATE_SEED_STOCK]abc123:name:Premium Tomato Seeds[/UPDATE_SEED_STOCK]
+        Valid fields: name, unit, maxCapacity, minThreshold, type
+        
         IMPORTANT: When adjusting stock, always use the exact stock ID from the seed stock context. The adjustment can be positive (adding) or negative (using/removing).
         For "change from X to Y", calculate the difference: if current is 0 and target is 40, use +40.
         
-        When a user asks to delete or remove a seed stock item entirely, use this format:
+        When a user asks to delete or remove seed stock items entirely, use this format:
         [DELETE_SEED_STOCK]stockId[/DELETE_SEED_STOCK]
         For example: [DELETE_SEED_STOCK]abc123[/DELETE_SEED_STOCK]
+        
+        For multiple deletions, use separate DELETE_SEED_STOCK commands for each item:
+        [DELETE_SEED_STOCK]stockId1[/DELETE_SEED_STOCK][DELETE_SEED_STOCK]stockId2[/DELETE_SEED_STOCK]
         
         If the user asks to initialize or set up their seed stock with basic items, use:
         [INIT_SEED_STOCK][/INIT_SEED_STOCK]
@@ -105,7 +115,6 @@ export async function POST(request: NextRequest) {
         - Crops: ${crops.map(c => `${c._id}: ${c.name} (${c.type}) - Planting: ${c.plantingDate || 'Not set'}, Harvest: ${c.expectedHarvestDate || 'Not set'}`).join(', ') || 'None registered'}
         - Soil Data: ${soilData.length} soil tests recorded
         - Weather Data: ${weatherData.length} weather records
-        - Recommendations: ${recommendations.length} active recommendations
         - Seed Stock: ${seedStock.map(s => `${s._id}: ${s.name} (${s.currentStock}/${s.maxCapacity} ${s.unit})`).join(', ') || 'No stock items'}
         
         When generating or updating crop calendars, you must use the actual Convex ID for the crop, not the crop name. The format for crop IDs is like "crp_1234567890abcdef". You can find the crop IDs in the user's farming context above.
@@ -177,7 +186,7 @@ export async function POST(request: NextRequest) {
             
             // Add a confirmation message to the response
             if (addedCrops.length > 0) {
-                text += (text ? '\n\n' : '') + `I've added the following crops to your farm records: ${addedCrops.join(', ')}.`;
+                text += (text ? '\n' : '') + `I've added the following crops to your farm records: ${addedCrops.join(', ')}.`;
             }
         }
         
@@ -250,43 +259,112 @@ export async function POST(request: NextRequest) {
             }
             
             if (changes.length > 0) {
-                text += (text ? '\n\n' : '') + `I've ${changes.join(' and ')} in your crop calendar.`;
+                text += (text ? '\n' : '') + `I've ${changes.join(' and ')} in your crop calendar.`;
             }
         }
         
         
         // Check if the response contains the special format for adding seed stock
-        const addSeedStockRegex = /\[ADD_SEED_STOCK\](.*?)\[\/ADD_SEED_STOCK\]/;
-        const seedStockMatch = text.match(addSeedStockRegex);
+        const addSeedStockRegex = /\[ADD_SEED_STOCK\](.*?)\[\/ADD_SEED_STOCK\]/g;
+        const seedStockMatches = [...text.matchAll(addSeedStockRegex)];
         
-        if (seedStockMatch) {
-            try {
-                // Extract seed stock data from the match
-                const parts = seedStockMatch[1].split(':');
-                if (parts.length >= 5) {
-                    const [name, type, currentStock, maxCapacity, unit] = parts;
+        if (seedStockMatches.length > 0) {
+            const addedItems = [];
+            const errorItems = [];
+            
+            console.log(`Processing ${seedStockMatches.length} seed stock items`);
+            
+            for (const match of seedStockMatches) {
+                try {
+                    console.log(`Processing seed stock match: ${match[1]}`);
                     
-                    // Add the seed stock item to the database
-                    await convex.mutation(api.database.createSeedStock, {
-                        userId,
-                        name: name.trim(),
-                        type: type.trim() as any,
-                        currentStock: parseInt(currentStock.trim()),
-                        maxCapacity: parseInt(maxCapacity.trim()),
-                        unit: unit.trim(),
+                    // Extract seed stock data from the match
+                    let parts = match[1].split(':');
+                    console.log(`Split parts:`, parts);
+                    
+                    // Handle case where AI might include field names like "name:Tomato Seeds:type:seeds..."
+                    // Strip out field names if they exist
+                    if (parts.length > 5 && parts[0].toLowerCase() === 'name') {
+                        // Remove field names and keep only values
+                        parts = [parts[1], parts[3], parts[5], parts[7], parts[9]];
+                    }
+                    
+                    if (parts.length >= 5) {
+                        const [name, type, currentStock, maxCapacity, unit] = parts;
+                        
+                        // Validate and normalize the type
+                        const normalizedType = type.trim().toLowerCase();
+                        let validType: "seeds" | "fertilizer" | "pesticide" | "equipment" | "other";
+                        
+                        switch (normalizedType) {
+                            case "seeds":
+                            case "seed":
+                                validType = "seeds";
+                                break;
+                            case "fertilizer":
+                            case "fertilizers":
+                                validType = "fertilizer";
+                                break;
+                            case "pesticide":
+                            case "pesticides":
+                                validType = "pesticide";
+                                break;
+                            case "equipment":
+                                validType = "equipment";
+                                break;
+                            default:
+                                validType = "other";
+                        }
+
+                        console.log(`Creating seed stock: ${name.trim()}, type: ${validType}, stock: ${currentStock.trim()}`);
+
+                        // Add the seed stock item to the database
+                        const result = await convex.mutation(api.database.createSeedStock, {
+                            userId,
+                            name: name.trim(),
+                            type: validType,
+                            currentStock: parseInt(currentStock.trim()),
+                            maxCapacity: parseInt(maxCapacity.trim()),
+                            unit: unit.trim(),
+                        });
+                        
+                        console.log(`Successfully created seed stock with ID: ${result}`);
+                        
+                        addedItems.push({
+                            name: name.trim(),
+                            currentStock: parseInt(currentStock.trim()),
+                            maxCapacity: parseInt(maxCapacity.trim()),
+                            unit: unit.trim()
+                        });
+                    } else {
+                        console.error(`Invalid seed stock format - expected at least 5 parts, got ${parts.length}`);
+                        throw new Error(`Invalid seed stock format - expected at least 5 parts, got ${parts.length}`);
+                    }
+                } catch (error) {
+                    console.error("Error adding seed stock:", error);
+                    console.error("Seed stock data:", match[1]);
+                    errorItems.push({
+                        data: match[1],
+                        error: error instanceof Error ? error.message : String(error)
                     });
-                    
-                    // Remove the special format from the response text
-                    text = text.replace(addSeedStockRegex, '').trim();
-                    
-                    // Add a confirmation message to the response
-                    text += (text ? '\n\n' : '') + `I've added ${name} to your seed stock inventory with ${currentStock} ${unit} out of ${maxCapacity} ${unit} capacity.`;
-                } else {
-                    throw new Error("Invalid seed stock format");
                 }
-            } catch (error) {
-                console.error("Error adding seed stock:", error);
-                text += (text ? '\n\n' : '') + `Sorry, I encountered an error while adding the seed stock. Please try again.`;
+            }
+            
+            // Remove all special format instances from the response text
+            text = text.replace(addSeedStockRegex, '').trim();
+            
+            // Add confirmation messages to the response
+            if (addedItems.length > 0) {
+                const confirmationMessage = addedItems.map(item => 
+                    `${item.name} (${item.currentStock}/${item.maxCapacity} ${item.unit})`
+                ).join(', ');
+                text += (text ? '\n' : '') + `I've added the following items to your seed stock inventory: ${confirmationMessage}.`;
+            }
+            
+            if (errorItems.length > 0) {
+                console.log(`Error items:`, errorItems);
+                const errorDetails = errorItems.map(item => `${item.data} (${item.error})`).join(', ');
+                text += (text ? '\n' : '') + `Sorry, I encountered errors while adding ${errorItems.length} item(s): ${errorDetails}. Please try again.`;
             }
         }
         
@@ -319,9 +397,9 @@ export async function POST(request: NextRequest) {
                     // Add a confirmation message to the response
                     const action = adjustment > 0 ? 'added' : 'used';
                     if (currentItem) {
-                        text += (text ? '\n\n' : '') + `I've ${action} ${Math.abs(adjustment)} ${currentItem.unit} for ${currentItem.name}. New stock level: ${currentItem.currentStock} ${currentItem.unit}.`;
+                        text += (text ? '\n' : '') + `I've ${action} ${Math.abs(adjustment)} ${currentItem.unit} for ${currentItem.name}. New stock level: ${currentItem.currentStock} ${currentItem.unit}.`;
                     } else {
-                        text += (text ? '\n\n' : '') + `I've ${action} ${Math.abs(adjustment)} units from your stock inventory.`;
+                        text += (text ? '\n' : '') + `I've ${action} ${Math.abs(adjustment)} units from your stock inventory.`;
                     }
                 } else {
                     throw new Error("Invalid stock adjustment format");
@@ -334,7 +412,129 @@ export async function POST(request: NextRequest) {
                     notes: parts[2]?.trim(),
                     matchedText: adjustStockMatch[1] 
                 });
-                text += (text ? '\n\n' : '') + `Sorry, I encountered an error while adjusting the stock: ${error instanceof Error ? error.message : String(error)}. Please try again.`;
+                text += (text ? '\n' : '') + `Sorry, I encountered an error while adjusting the stock: ${error instanceof Error ? error.message : String(error)}. Please try again.`;
+            }
+        }
+        
+        // Check if the response contains the special format for updating seed stock
+        const updateSeedStockRegex = /\[UPDATE_SEED_STOCK\](.*?)\[\/UPDATE_SEED_STOCK\]/g;
+        const updateSeedStockMatches = [...text.matchAll(updateSeedStockRegex)];
+        
+        if (updateSeedStockMatches.length > 0) {
+            const updatedItems = [];
+            const errorItems = [];
+            
+            console.log(`Processing ${updateSeedStockMatches.length} seed stock updates`);
+            
+            for (const match of updateSeedStockMatches) {
+                try {
+                    console.log(`Processing seed stock update: ${match[1]}`);
+                    
+                    // Extract update data from the match
+                    const parts = match[1].split(':');
+                    console.log(`Split parts:`, parts);
+                    
+                    if (parts.length >= 3) {
+                        const [stockId, field, newValue] = parts;
+                        
+                        // Validate the field
+                        const validFields = ['name', 'unit', 'maxCapacity', 'minThreshold', 'type'];
+                        const normalizedField = field.trim().toLowerCase();
+                        
+                        if (!validFields.includes(normalizedField)) {
+                            throw new Error(`Invalid field: ${field}. Valid fields are: ${validFields.join(', ')}`);
+                        }
+                        
+                        // Prepare the update data
+                        let updateData: any = {};
+                        
+                        if (normalizedField === 'maxcapacity') {
+                            updateData.maxCapacity = parseInt(newValue.trim());
+                            if (isNaN(updateData.maxCapacity)) {
+                                throw new Error(`Invalid maxCapacity value: ${newValue}`);
+                            }
+                        } else if (normalizedField === 'minthreshold') {
+                            updateData.minThreshold = parseInt(newValue.trim());
+                            if (isNaN(updateData.minThreshold)) {
+                                throw new Error(`Invalid minThreshold value: ${newValue}`);
+                            }
+                        } else if (normalizedField === 'type') {
+                            const normalizedType = newValue.trim().toLowerCase();
+                            let validType: "seeds" | "fertilizer" | "pesticide" | "equipment" | "other";
+                            
+                            switch (normalizedType) {
+                                case "seeds":
+                                case "seed":
+                                    validType = "seeds";
+                                    break;
+                                case "fertilizer":
+                                case "fertilizers":
+                                    validType = "fertilizer";
+                                    break;
+                                case "pesticide":
+                                case "pesticides":
+                                    validType = "pesticide";
+                                    break;
+                                case "equipment":
+                                    validType = "equipment";
+                                    break;
+                                default:
+                                    validType = "other";
+                            }
+                            updateData.type = validType;
+                        } else {
+                            // For name and unit, use the value directly
+                            updateData[normalizedField] = newValue.trim();
+                        }
+                        
+                        console.log(`Updating seed stock: ${stockId.trim()}, field: ${normalizedField}, value:`, updateData);
+                        
+                        // Update the seed stock item
+                        await convex.mutation(api.database.updateRecord, {
+                            id: stockId.trim(),
+                            data: updateData,
+                        });
+                        
+                        // Get the updated item for confirmation
+                        const allSeedStock = await convex.query(api.database.getSeedStock, { userId });
+                        const updatedItem = allSeedStock.find((item: any) => item._id === stockId.trim());
+                        
+                        console.log(`Successfully updated seed stock: ${updatedItem?.name}`);
+                        
+                        updatedItems.push({
+                            name: updatedItem?.name || 'Unknown item',
+                            field: normalizedField,
+                            newValue: normalizedField === 'type' ? updateData.type : newValue.trim()
+                        });
+                    } else {
+                        console.error(`Invalid seed stock update format - expected at least 3 parts, got ${parts.length}`);
+                        throw new Error(`Invalid seed stock update format - expected at least 3 parts, got ${parts.length}`);
+                    }
+                } catch (error) {
+                    console.error("Error updating seed stock:", error);
+                    console.error("Seed stock update data:", match[1]);
+                    errorItems.push({
+                        data: match[1],
+                        error: error instanceof Error ? error.message : String(error)
+                    });
+                }
+            }
+            
+            // Remove all special format instances from the response text
+            text = text.replace(updateSeedStockRegex, '').trim();
+            
+            // Add confirmation messages to the response
+            if (updatedItems.length > 0) {
+                const confirmationMessage = updatedItems.map(item => 
+                    `${item.name} (${item.field} changed to ${item.newValue})`
+                ).join(', ');
+                text += (text ? '\n' : '') + `I've updated the following seed stock items: ${confirmationMessage}.`;
+            }
+            
+            if (errorItems.length > 0) {
+                console.log(`Error items:`, errorItems);
+                const errorDetails = errorItems.map(item => `${item.data} (${item.error})`).join(', ');
+                text += (text ? '\n' : '') + `Sorry, I encountered errors while updating ${errorItems.length} item(s): ${errorDetails}. Please try again.`;
             }
         }
         
@@ -354,49 +554,73 @@ export async function POST(request: NextRequest) {
                 
                 // Add a confirmation message to the response
                 if (result.count) {
-                    text += (text ? '\n\n' : '') + `I've initialized your seed stock with ${result.count} basic items including tomato seeds, corn seeds, wheat seeds, organic fertilizer, and pesticide.`;
+                    text += (text ? '\n' : '') + `I've initialized your seed stock with ${result.count} basic items including tomato seeds, corn seeds, wheat seeds, organic fertilizer, and pesticide.`;
                 } else {
-                    text += (text ? '\n\n' : '') + `You already have seed stock items in your inventory.`;
+                    text += (text ? '\n' : '') + `You already have seed stock items in your inventory.`;
                 }
             } catch (error) {
                 console.error("Error initializing seed stock:", error);
-                text += (text ? '\n\n' : '') + `Sorry, I encountered an error while setting up your seed stock. Please try again.`;
+                text += (text ? '\n' : '') + `Sorry, I encountered an error while setting up your seed stock. Please try again.`;
             }
         }
         
         // Check if the response contains the special format for deleting seed stock
-        const deleteSeedStockRegex = /\[DELETE_SEED_STOCK\](.*?)\[\/DELETE_SEED_STOCK\]/;
-        const deleteSeedStockMatch = text.match(deleteSeedStockRegex);
+        const deleteSeedStockRegex = /\[DELETE_SEED_STOCK\](.*?)\[\/DELETE_SEED_STOCK\]/g;
+        const deleteSeedStockMatches = [...text.matchAll(deleteSeedStockRegex)];
         
-        if (deleteSeedStockMatch) {
-            try {
-                const stockId = deleteSeedStockMatch[1].trim();
-                
-                // Get the seed stock item first to get its name for confirmation
-                const allSeedStock = await convex.query(api.database.getSeedStock, { userId });
-                const itemToDelete = allSeedStock.find((item: any) => item._id === stockId);
-                
-                if (!itemToDelete) {
-                    throw new Error("Seed stock item not found");
+        if (deleteSeedStockMatches.length > 0) {
+            const deletedItems = [];
+            const errorItems = [];
+            
+            console.log(`Processing ${deleteSeedStockMatches.length} seed stock deletions`);
+            
+            // Get all seed stock first to avoid multiple queries
+            const allSeedStock = await convex.query(api.database.getSeedStock, { userId });
+            
+            for (const match of deleteSeedStockMatches) {
+                try {
+                    const stockId = match[1].trim();
+                    console.log(`Processing seed stock deletion: ${stockId}`);
+                    
+                    // Find the seed stock item first to get its name for confirmation
+                    const itemToDelete = allSeedStock.find((item: any) => item._id === stockId);
+                    
+                    if (!itemToDelete) {
+                        throw new Error("Seed stock item not found");
+                    }
+                    
+                    // Delete the seed stock item
+                    await convex.mutation(api.database.deleteRecord, {
+                        id: stockId,
+                    });
+                    
+                    console.log(`Successfully deleted seed stock: ${itemToDelete.name}`);
+                    deletedItems.push(itemToDelete.name);
+                } catch (error) {
+                    console.error("Error deleting seed stock:", error);
+                    console.error("Delete seed stock details:", { 
+                        stockId: match[1]?.trim(),
+                        matchedText: match[1] 
+                    });
+                    errorItems.push({
+                        stockId: match[1]?.trim(),
+                        error: error instanceof Error ? error.message : String(error)
+                    });
                 }
-                
-                // Delete the seed stock item
-                await convex.mutation(api.database.deleteRecord, {
-                    id: stockId,
-                });
-                
-                // Remove the special format from the response text
-                text = text.replace(deleteSeedStockRegex, '').trim();
-                
-                // Add a confirmation message to the response
-                text += (text ? '\n\n' : '') + `I've successfully removed ${itemToDelete.name} from your seed stock inventory.`;
-            } catch (error) {
-                console.error("Error deleting seed stock:", error);
-                console.error("Delete seed stock details:", { 
-                    stockId: deleteSeedStockMatch[1]?.trim(),
-                    matchedText: deleteSeedStockMatch[1] 
-                });
-                text += (text ? '\n\n' : '') + `Sorry, I encountered an error while deleting the seed stock item: ${error instanceof Error ? error.message : String(error)}. Please try again.`;
+            }
+            
+            // Remove all special format instances from the response text
+            text = text.replace(deleteSeedStockRegex, '').trim();
+            
+            // Add confirmation messages to the response
+            if (deletedItems.length > 0) {
+                text += (text ? '\n' : '') + `I've successfully removed the following items from your seed stock inventory: ${deletedItems.join(', ')}.`;
+            }
+            
+            if (errorItems.length > 0) {
+                console.log(`Error items:`, errorItems);
+                const errorDetails = errorItems.map(item => `${item.stockId} (${item.error})`).join(', ');
+                text += (text ? '\n' : '') + `Sorry, I encountered errors while deleting ${errorItems.length} item(s): ${errorDetails}. Please try again.`;
             }
         }
 

@@ -13,6 +13,9 @@ import {
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useUser } from "@clerk/nextjs";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { restrictToHorizontalAxis, restrictToParentElement } from '@dnd-kit/modifiers';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
 
 interface CropSeason {
   crop: string;
@@ -21,7 +24,63 @@ interface CropSeason {
   plantingEnd: number;
   harvestStart: number;
   harvestEnd: number;
+  cropId?: string; // Add crop ID for database updates
 }
+
+interface DraggableSegmentProps {
+  id: string;
+  children: React.ReactNode;
+  className?: string;
+}
+
+interface DroppableMonthProps {
+  id: string;
+  children: React.ReactNode;
+  className?: string;
+}
+
+const DraggableSegment = ({ id, children, className }: DraggableSegmentProps) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    isDragging,
+  } = useDraggable({
+    id,
+  });
+
+  const style = transform ? {
+    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+  } : undefined;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`${className} ${isDragging ? 'opacity-50 z-50' : ''} cursor-grab active:cursor-grabbing`}
+      {...listeners}
+      {...attributes}
+    >
+      {children}
+    </div>
+  );
+};
+
+const DroppableMonth = ({ id, children, className }: DroppableMonthProps) => {
+  const { isOver, setNodeRef } = useDroppable({
+    id,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`${className} ${isOver ? 'bg-blue-100' : ''} transition-colors`}
+    >
+      {children}
+    </div>
+  );
+};
 
 interface GanttCropCalendarProps {
   isFullPage?: boolean;
@@ -40,9 +99,72 @@ export const GanttCropCalendar = ({ isFullPage = false }: GanttCropCalendarProps
     api.aiAssistant.getUserContext,
     convexUser ? { userId: convexUser._id } : "skip"
   );
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor)
+  );
   
   // Memoize arrays to prevent infinite re-renders
   const crops = React.useMemo(() => userData?.crops || [], [userData?.crops]);
+
+  // Handle drag end
+  const handleDragEnd = React.useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (!over || !active) return;
+
+    // Parse drag ID to get crop and segment type
+    const dragIdParts = active.id.toString().split('-');
+    const cropName = dragIdParts[0];
+    const segmentType = dragIdParts[1]; // 'planting' or 'harvest'
+    const targetMonth = parseInt(over.id.toString().split('-')[1]);
+    
+    if (isNaN(targetMonth)) return;
+
+    // Find the crop to update
+    const cropToUpdate = crops.find((crop: any) => 
+      crop.name.toLowerCase() === cropName.toLowerCase()
+    );
+    
+    if (!cropToUpdate) return;
+
+    try {
+      const currentYear = new Date().getFullYear();
+      
+      if (segmentType === 'planting') {
+        // Update planting date to the target month
+        const newPlantingDate = new Date(currentYear, targetMonth, 15).toISOString().split('T')[0];
+        await updateCrop({
+          id: cropToUpdate._id,
+          data: {
+            plantingDate: newPlantingDate,
+          }
+        });
+      } else if (segmentType === 'harvest') {
+        // Update harvest date to the target month
+        // Check if harvest should be in next year
+        const plantingMonth = cropToUpdate.plantingDate ? 
+          new Date(cropToUpdate.plantingDate).getMonth() : 0;
+        const harvestYear = targetMonth < plantingMonth ? currentYear + 1 : currentYear;
+        
+        const newHarvestDate = new Date(harvestYear, targetMonth, 15).toISOString().split('T')[0];
+        await updateCrop({
+          id: cropToUpdate._id,
+          data: {
+            expectedHarvestDate: newHarvestDate,
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error updating crop dates:', error);
+    }
+  }, [crops, updateCrop]);
 
   // AI logic for optimal planting and harvesting seasons
   const getOptimalSeasons = React.useCallback((cropType: string) => {
@@ -184,7 +306,8 @@ export const GanttCropCalendar = ({ isFullPage = false }: GanttCropCalendarProps
         plantingStart,
         plantingEnd,
         harvestStart,
-        harvestEnd
+        harvestEnd,
+        cropId: crop._id
       };
     });
     
@@ -272,88 +395,109 @@ export const GanttCropCalendar = ({ isFullPage = false }: GanttCropCalendarProps
   const containerClass = isFullPage ? "h-screen" : "h-80";
 
   return (
-    <Card className={containerClass}>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
-              <Sprout className="w-4 h-4 text-white" />
-            </div>
-            <span>CROP CALENDAR</span>
-          </CardTitle>
-          
-          <div className="flex items-center space-x-2">
-            <Badge variant="outline" className="bg-green-100 text-green-800">
-              <div className="w-2 h-2 bg-green-500 rounded-full mr-1" />
-              PLANTING SEASON
-            </Badge>
-            <Badge variant="outline" className="bg-orange-100 text-orange-800">
-              <div className="w-2 h-2 bg-orange-500 rounded-full mr-1" />
-              HARVEST SEASON
-            </Badge>
-            {isFullPage && (
-              <Button size="sm" variant="outline" onClick={handleAddCrop}>
-                <Plus className="w-4 h-4 mr-1" />
-                Add Crop
-              </Button>
-            )}
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardContent className="p-0 flex-1 overflow-hidden">
-        <div className="h-full flex flex-col">
-          {/* Grid container using CSS Grid for perfect alignment */}
-          <div className="flex-1 overflow-y-auto">
-            {/* Header row */}
-            <div className="grid border-b bg-gray-50" style={{ gridTemplateColumns: '8rem repeat(12, 1fr)' }}>
-              <div className="p-2 border-r bg-gray-100 flex items-center justify-center">
-                <span className="text-xs font-medium text-gray-600">CROPS</span>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+      modifiers={[restrictToHorizontalAxis]}
+    >
+      <Card className={containerClass}>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
+                <Sprout className="w-4 h-4 text-white" />
               </div>
-              {months.map((month, index) => (
-                <div key={month} className="p-1 text-center text-xs font-medium text-gray-600 border-r last:border-r-0">
-                  {month}
+              <span>CROP CALENDAR</span>
+            </CardTitle>
+            
+            <div className="flex items-center space-x-2">
+              <Badge variant="outline" className="bg-green-100 text-green-800">
+                <div className="w-2 h-2 bg-green-500 rounded-full mr-1" />
+                PLANTING SEASON
+              </Badge>
+              <Badge variant="outline" className="bg-orange-100 text-orange-800">
+                <div className="w-2 h-2 bg-orange-500 rounded-full mr-1" />
+                HARVEST SEASON
+              </Badge>
+              {isFullPage && (
+                <Button size="sm" variant="outline" onClick={handleAddCrop}>
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add Crop
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-0 flex-1 overflow-hidden">
+          <div className="h-full flex flex-col">
+            {/* Grid container using CSS Grid for perfect alignment */}
+            <div className="flex-1 overflow-y-auto">
+              {/* Header row */}
+              <div className="grid border-b bg-gray-50" style={{ gridTemplateColumns: '8rem repeat(12, 1fr)' }}>
+                <div className="p-2 border-r bg-gray-100 flex items-center justify-center">
+                  <span className="text-xs font-medium text-gray-600">CROPS</span>
+                </div>
+                {months.map((month, index) => (
+                  <div key={month} className="p-1 text-center text-xs font-medium text-gray-600 border-r last:border-r-0">
+                    {month}
+                  </div>
+                ))}
+              </div>
+
+              {/* Crop rows */}
+              {cropData.map((crop, index) => (
+                <div key={crop.crop} className="grid border-b hover:bg-gray-50 transition-colors" style={{ gridTemplateColumns: '8rem repeat(12, 1fr)', minHeight: '48px' }}>
+                  <div className="p-3 border-r bg-white flex items-center space-x-2">
+                    {crop.icon}
+                    <span className="text-xs font-medium text-gray-700 truncate">
+                      {crop.crop}
+                    </span>
+                    {isFullPage && (
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        className="ml-auto p-1 h-5 w-5"
+                        onClick={() => handleRemoveCrop(crop.crop)}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    )}
+                  </div>
+                  {months.map((_, monthIndex) => (
+                    <DroppableMonth
+                      key={monthIndex}
+                      id={`${crop.crop}-${monthIndex}`}
+                      className="border-r border-gray-200 last:border-r-0 relative flex items-center justify-center min-h-[48px]"
+                    >
+                      {/* Planting segment for this month */}
+                      {crop.plantingStart <= monthIndex && monthIndex <= crop.plantingEnd && (
+                        <DraggableSegment
+                          id={`${crop.crop}-planting-${monthIndex}`}
+                          className="absolute top-1 left-1 right-1 h-4 bg-green-500 rounded-sm opacity-80 hover:opacity-100 transition-opacity"
+                        >
+                          <div className="w-full h-full" />
+                        </DraggableSegment>
+                      )}
+                      {/* Harvesting segment for this month */}
+                      {crop.harvestStart <= monthIndex && monthIndex <= crop.harvestEnd && (
+                        <DraggableSegment
+                          id={`${crop.crop}-harvest-${monthIndex}`}
+                          className="absolute bottom-1 left-1 right-1 h-4 bg-orange-500 rounded-sm opacity-80 hover:opacity-100 transition-opacity"
+                        >
+                          <div className="w-full h-full" />
+                        </DraggableSegment>
+                      )}
+                    </DroppableMonth>
+                  ))}
                 </div>
               ))}
             </div>
 
-            {/* Crop rows */}
-            {cropData.map((crop, index) => (
-              <div key={crop.crop} className="grid border-b hover:bg-gray-50 transition-colors" style={{ gridTemplateColumns: '8rem repeat(12, 1fr)', minHeight: '48px' }}>
-                <div className="p-3 border-r bg-white flex items-center space-x-2">
-                  {crop.icon}
-                  <span className="text-xs font-medium text-gray-700 truncate">
-                    {crop.crop}
-                  </span>
-                  {isFullPage && (
-                    <Button 
-                      size="sm" 
-                      variant="ghost" 
-                      className="ml-auto p-1 h-5 w-5"
-                      onClick={() => handleRemoveCrop(crop.crop)}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  )}
-                </div>
-                {months.map((_, monthIndex) => (
-                  <div key={monthIndex} className="border-r border-gray-200 last:border-r-0 relative flex items-center justify-center">
-                    {/* Planting segment for this month */}
-                    {crop.plantingStart <= monthIndex && monthIndex <= crop.plantingEnd && (
-                      <div className="absolute top-1 left-1 right-1 h-4 bg-green-500 rounded-sm opacity-80" />
-                    )}
-                    {/* Harvesting segment for this month */}
-                    {crop.harvestStart <= monthIndex && monthIndex <= crop.harvestEnd && (
-                      <div className="absolute bottom-1 left-1 right-1 h-4 bg-orange-500 rounded-sm opacity-80" />
-                    )}
-                  </div>
-                ))}
-              </div>
-            ))}
           </div>
-
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </DndContext>
   );
 };

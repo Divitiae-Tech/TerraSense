@@ -10,12 +10,9 @@ export const getAllUserData = query({
       crops,
       soilData,
       plantImages,
-      harvests,
-      marketplaceListings,
+      cropHarvests,
       weatherData,
-      recommendations,
       equipment,
-      waterUsage,
       seedStock
     ] = await Promise.all([
       ctx.db.query("users").filter(q => q.eq(q.field("_id"), userId)).first(),
@@ -23,12 +20,9 @@ export const getAllUserData = query({
       ctx.db.query("crops").withIndex("by_user", q => q.eq("userId", userId)).collect(),
       ctx.db.query("soilData").withIndex("by_user", q => q.eq("userId", userId)).collect(),
       ctx.db.query("plantImages").withIndex("by_user", q => q.eq("userId", userId)).collect(),
-      ctx.db.query("harvests").withIndex("by_user", q => q.eq("userId", userId)).collect(),
-      ctx.db.query("marketplaceListings").withIndex("by_user", q => q.eq("userId", userId)).collect(),
+      ctx.db.query("cropHarvests").withIndex("by_user", q => q.eq("userId", userId)).collect(),
       ctx.db.query("weatherData").withIndex("by_user", q => q.eq("userId", userId)).collect(),
-      ctx.db.query("recommendations").withIndex("by_user", q => q.eq("userId", userId)).collect(),
       ctx.db.query("equipment").withIndex("by_user", q => q.eq("userId", userId)).collect(),
-      ctx.db.query("waterUsage").withIndex("by_user", q => q.eq("userId", userId)).collect(),
       ctx.db.query("seedStock").withIndex("by_user", q => q.eq("userId", userId)).collect()
     ]);
 
@@ -38,12 +32,9 @@ export const getAllUserData = query({
       crops,
       soilData,
       plantImages,
-      harvests,
-      marketplaceListings,
+      cropHarvests,
       weatherData,
-      recommendations,
       equipment,
-      waterUsage,
       seedStock
     };
   },
@@ -255,61 +246,13 @@ export const createHarvest = mutation({
     lessonsLearned: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("harvests", {
+    return await ctx.db.insert("cropHarvests", {
       ...args,
       createdAt: Date.now(),
     });
   },
 });
 
-export const createMarketplaceListing = mutation({
-  args: {
-    userId: v.id("users"),
-    cropId: v.optional(v.id("crops")),
-    title: v.string(),
-    description: v.optional(v.string()),
-    category: v.string(),
-    quantity: v.number(),
-    unit: v.string(),
-    pricePerUnit: v.number(),
-    totalPrice: v.number(),
-    currency: v.optional(v.string()),
-    location: v.string(),
-    coordinates: v.optional(v.object({
-      latitude: v.number(),
-      longitude: v.number(),
-    })),
-    transportNeeds: v.optional(v.union(
-      v.literal("pickup_only"),
-      v.literal("delivery_available"),
-      v.literal("flexible")
-    )),
-    deliveryRadius: v.optional(v.number()),
-    images: v.optional(v.array(v.string())),
-    qualityGrade: v.optional(v.union(
-      v.literal("premium"),
-      v.literal("standard"),
-      v.literal("economy")
-    )),
-    harvestDate: v.optional(v.string()),
-    expiryDate: v.optional(v.string()),
-    organicCertified: v.optional(v.boolean()),
-    available: v.boolean(),
-    featured: v.optional(v.boolean()),
-    views: v.optional(v.number()),
-    contactMethod: v.optional(v.union(
-      v.literal("phone"),
-      v.literal("email"),
-      v.literal("platform_message")
-    )),
-  },
-  handler: async (ctx, args) => {
-    return await ctx.db.insert("marketplaceListings", {
-      ...args,
-      createdAt: Date.now(),
-    });
-  },
-});
 
 export const createWeatherData = mutation({
   args: {
@@ -429,34 +372,6 @@ export const createWeatherData = mutation({
   },
 });
 
-export const createRecommendation = mutation({
-  args: {
-    userId: v.id("users"),
-    cropId: v.optional(v.id("crops")),
-    type: v.union(
-      v.literal("planting"),
-      v.literal("fertilizing"),
-      v.literal("watering"),
-      v.literal("pest_control"),
-      v.literal("harvest_timing"),
-      v.literal("market_timing")
-    ),
-    title: v.string(),
-    description: v.string(),
-    priority: v.union(v.literal("low"), v.literal("medium"), v.literal("high")),
-    confidence: v.optional(v.number()),
-    dueDate: v.optional(v.string()),
-    estimatedImpact: v.optional(v.string()),
-    estimatedCost: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
-    return await ctx.db.insert("recommendations", {
-      ...args,
-      status: "pending",
-      createdAt: Date.now(),
-    });
-  },
-});
 
 export const createEquipment = mutation({
   args: {
@@ -482,24 +397,6 @@ export const createEquipment = mutation({
   },
 });
 
-export const createWaterUsage = mutation({
-  args: {
-    userId: v.id("users"),
-    cropId: v.optional(v.id("crops")),
-    date: v.string(),
-    amount: v.number(),
-    source: v.optional(v.string()),
-    cost: v.optional(v.number()),
-    efficiency: v.optional(v.number()),
-    notes: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    return await ctx.db.insert("waterUsage", {
-      ...args,
-      createdAt: Date.now(),
-    });
-  },
-});
 
 
 export const createSeedStock = mutation({
@@ -599,6 +496,16 @@ export const adjustStock = mutation({
       lastUpdated: Date.now(),
       notes: notes || item.notes,
     });
+  },
+});
+
+export const getCropHarvests = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    return await ctx.db
+      .query("cropHarvests")
+      .withIndex("by_user", q => q.eq("userId", userId))
+      .collect();
   },
 });
 

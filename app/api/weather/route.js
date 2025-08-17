@@ -1,12 +1,25 @@
 // app/api/weather/route.js
 import { NextResponse } from 'next/server';
+import { getAuth } from '@clerk/nextjs/server';
 import { api } from "@/convex/_generated/api";
 import { ConvexHttpClient } from "convex/browser";
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL);
 
-export async function GET() {
+export async function GET(request) {
   try {
+    // Get the authenticated user
+    const auth = getAuth(request);
+    if (!auth.userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Get the user's Convex ID
+    const user = await convex.query(api.users.getUserByClerkId, { clerkId: auth.userId });
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
     const lat = '-26.2041'; // Johannesburg
     const lon = '28.0473';
     const timezone = 'Africa/Johannesburg';
@@ -249,7 +262,7 @@ export async function GET() {
 
     // Prepare data that exactly matches the schema
     const weatherDataForDB = {
-      userId: "k570wqbpgfmgtah21jyn7aa0p97nbt42", // your user id
+      userId: user._id, // Use the authenticated user's Convex ID
       location: {
         lat: response.metadata.location.lat,
         lon: response.metadata.location.lon,
